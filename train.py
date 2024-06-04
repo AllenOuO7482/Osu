@@ -5,10 +5,7 @@ import numpy as np
 import random
 import time
 import copy
-import keyboard
 import matplotlib.pyplot as plt
-import pydirectinput as pyd
-from pathlib import Path
 from collections import deque
 from IPython.display import clear_output
 
@@ -18,49 +15,27 @@ from models import Actor, Critic
 
 def get_batch(replay, batch_size, device):
     """
-    get a batch of data from replay buffer
+    Get a batch of data from replay buffer.
+
+    # Params:
+        ``replay``: deque, replay buffer
+        ``batch_size``: int, size of the batch
+        ``device``: torch.device, device to store the tensors
+
+    # Returns:
+        ``s``: torch.tensor, state tensor with shape ``[batch_size, 1, 61, 81]``
+        ``a``: torch.tensor, action tensor with shape ``[batch_size, 2]``
+        ``r``: torch.tensor, reward tensor with shape ``[batch_size]``
+        ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 1, 61, 81]``
     """
+
     batch = random.sample(replay, batch_size)
-    # s = {'screen': np.ndarray, 'm_pos': np.ndarray, 'key_pressed': bool}
-    # a = np.ndarray with shape [batch_size, 2]
-    # r = float with shape [batch_size]
-    # s1.shape = {'screen': np.ndarray, 'm_pos': np.ndarray, 'key_pressed': bool}
-    screens, m_pos, key_pressed = [], [], []
-    _s = [s for (s, a, r, s1) in batch]
-    for i in range(batch_size):
-        screens.append(_s[i]['screen'])
-        m_pos.append(_s[i]['m_pos'])
-        key_pressed.append(_s[i]['key_pressed'])
-
-    screens = torch.tensor(np.array(screens), dtype=torch.float32).to(device)
-    m_pos = torch.tensor(np.array(m_pos), dtype=torch.float32).to(device)
-    key_pressed = torch.tensor(np.array(key_pressed), dtype=torch.float32).to(device)
-    s = {'screen': screens,'m_pos': m_pos, 'key_pressed': key_pressed}
-
+    
+    s = torch.tensor(np.array([s for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     a = torch.tensor(np.array([a for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     r = torch.tensor(np.array([r for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
+    s1 = torch.tensor(np.array([s1 for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
 
-    screens, m_pos, key_pressed = [], [], []
-    _s1 = [_s1 for (s, a, r, s1) in batch]
-    for i in range(batch_size):
-        screens.append(_s1[i]['screen'])
-        m_pos.append(_s1[i]['m_pos'])
-        key_pressed.append(_s1[i]['key_pressed'])
-
-    screens = torch.tensor(np.array(screens), dtype=torch.float32).to(device)
-    m_pos = torch.tensor(np.array(m_pos), dtype=torch.float32).to(device)
-    key_pressed = torch.tensor(np.array(key_pressed), dtype=torch.float32).to(device)
-    s1 = {'screen': screens,'m_pos': m_pos, 'key_pressed': key_pressed}
-
-    # if s.shape != (batch_size, 1, 60, 80):
-    #     raise Exception("s.shape should be (batch_size, 1, 60, 80)")
-    # if a.shape != (batch_size, 2):
-    #     raise Exception("a.shape should be (batch_size, 2)")
-    # if r.ndim != 1:
-    #     raise Exception("r.shape should be (batch_size)")
-    # if s_.shape != (batch_size, 1, 60, 80):
-    #     raise Exception("s_.shape should be (batch_size, 1, 60, 80)")
-    
     return s, a, r, s1
 
 def target_update(model_main, model_target, tau):
@@ -83,21 +58,10 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
     env = OsuEnv()
     for i in range(episodes):
         s = env.reset()
-        if s['screen'].shape[0] != 1:
-            s_screen = np.expand_dims(s['screen'], axis=0)
+        if s.shape[0] != 1:
+            s = np.expand_dims(s, axis=0)
 
-        else:
-            s_screen = s['screen']
-
-        s_screen = torch.tensor(s_screen, dtype=torch.float32).to(device)
-
-        if s['m_pos'].shape[0] != 1:
-            m_pos = np.expand_dims(s['m_pos'], axis=0)
-
-        else:
-            m_pos = s['m_pos']
-
-        m_pos = torch.tensor(m_pos, dtype=torch.float32).to(device)
+        s = torch.tensor(s, dtype=torch.float32).to(device)
 
         # print(s_screen)
         episode_reward = 0
@@ -115,23 +79,26 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
                 time.sleep(0.1)
 
             # collect experience 
-            a = A_main(s_screen, m_pos).detach()
+            a = A_main(s).detach()
+
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high) # TODO
             a0 = a0.squeeze(0)
 
             s1, r, done, _ = env.step(a0)
             env.render()
             
-            s1_screen = np.expand_dims(s1['screen'], axis=0)
-            s1_screen = torch.tensor(s1_screen, dtype=torch.float32).to(device)
-            replays.append((s_screen.cpu().numpy(), a0, r / 10, s1_screen.cpu().numpy()))
-            s_screen = s1_screen
+            s1 = np.expand_dims(s1, axis=0) # (61, 81) to (1, 61, 81)
+            s1 = torch.tensor(s1, dtype=torch.float32).to(device)
+            replays.append((s.cpu().numpy(), a0, r / 10, s1.cpu().numpy()))
+
+            s = s1
+
             if len(replays) >= buffer * 0.4:
                 # when buffer is full, start training
                 # sample a batch of data from replay buffer
                 s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-                a_bat = A_main(s_bat['screen'], s_bat['m_pos'])
-                q_bat = Q_main(s_bat['screen'], s_bat['m_pos'], a_bat)
+                a_bat = A_main(s_bat)
+                q_bat = Q_main(s_bat, a_bat)
                 # calculate loss and update Actor
                 loss_a = -torch.mean(q_bat)
                 opt_a.zero_grad()
@@ -139,10 +106,10 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
                 opt_a.step()
                 losses_a.append(loss_a.item())
                 # update Q-function
-                y_hat = Q_main(s_bat['screen'], s_bat['m_pos'], a0_bat) # predicted Q-value
+                y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
                 with torch.no_grad():
-                    a1_bat = A_target(s1_bat['screen'], s1_bat['m_pos'])
-                    q1_bat = Q_target(s1_bat['screen'], s1_bat['m_pos'], a1_bat) # next state's Q-value
+                    a1_bat = A_target(s1_bat)
+                    q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
                     y = r_bat + gamma * q1_bat
                 # calculate loss and update Critic
                 loss_c = loss_fn(y.detach(), y_hat)
@@ -221,7 +188,7 @@ if __name__ == '__main__':
         raise Exception("Cuda is not available. You should run on the GPU")
 
     # hyperparameters and initialization
-    state_space = env.observation_space['screen'].shape # state space size (1, 61, 81)
+    state_space = env.observation_space.shape # state space size (1, 61, 81)
     action_space = env.action_space.shape[0] # action space size
     episodes = 250 # episodes
     gamma = 0.9  # discount factor
@@ -236,8 +203,8 @@ if __name__ == '__main__':
 
     state_dim = (61, 81, 1)     
     action_dim = 2
-    act_low = np.array([env.action_range[0], env.action_range[1]], dtype=np.float32)
-    act_high = np.array([env.action_range[2], env.action_range[3]], dtype=np.float32)
+    act_low = np.array([-1, -1], dtype=np.float32)
+    act_high = np.array([1, 1], dtype=np.float32)
 
     # define actor-critic models
     A_main = Actor(state_dim, action_dim).to(device)
@@ -258,6 +225,7 @@ if __name__ == '__main__':
 
     rewards = []
 
+    # print(get_batch(replays, batch_size, device))
     # record game state
     # r.record_game_state()
 

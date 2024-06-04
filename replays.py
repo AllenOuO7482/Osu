@@ -72,7 +72,7 @@ def worker(q, q_lock, r_lock, replays):
         except Exception as e:
             print(f"Error loading replay: {file_path}, Exception: {e}")
 
-def load(folder_path = "C:/Users/sword/.vscode/Python/AI/Osu/game_state"):
+def load(folder_path = "C:/Users/sword/.vscode/Osu/game_state"):
     manager = multiprocessing.Manager()
     file_queue = manager.Queue()
     _replays = manager.list(deque(maxlen=50000))

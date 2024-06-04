@@ -36,56 +36,44 @@ class Actor(nn.Module):
         # state_dim = (61, 81, 1)
         super(Actor, self).__init__()
         self.cnn = ScreenModel(state_dim[0], state_dim[1], state_dim[2])
-        self.h1s = nn.Linear(self.cnn._to_linear, 64)
-        self.h1m = nn.Linear(2, 64)
-        self.h2 = nn.Linear(128, 128)
+        self.h1 = nn.Linear(self.cnn._to_linear, 64)
+        self.h2 = nn.Linear(64, 128)
         self.h3 = nn.Linear(128, 64)
         self.fc = nn.Linear(64, action_dim)
 
-        self.h1s.weight.data.normal_(0, 0.1)
-        self.h1m.weight.data.normal_(0, 0.1)
+        self.h1.weight.data.normal_(0, 0.1)
         self.h2.weight.data.normal_(0, 0.1)
         self.h3.weight.data.normal_(0, 0.1)
         self.fc.weight.data.normal_(0, 0.1)
 
-    def forward(self, screen, mouse_pos): # TODO delete mouse_pos
-        xs = self.cnn(screen)
-        xs = F.relu(self.h1s(xs))
-        xm = F.relu(self.h1m(mouse_pos))
-        x = torch.cat((xs, xm), dim=1)
+    def forward(self, screen): # TODO delete mouse_pos
+        x = self.cnn(screen)
+        x = F.relu(self.h1(x))
         x = F.relu(self.h2(x))
         x = F.relu(self.h3(x))
         x = torch.tanh(self.fc(x))
-        # x [[x, y]]
-        print('original x:', x)
-        310, 70, 1610, 1045
-        x[0, 0] = 310 + 1610 / 2 + (x[0, 0] * (1610 / 2))
-        x[0, 1] = 70 + 1045 / 2 + (x[0, 1] * (1045 / 2))
-        print('modified x:', x)
+        # print('original x:', x)
         return x
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
         self.cnn = ScreenModel(state_dim[0], state_dim[1], state_dim[2])
-        self.h1s = nn.Linear(self.cnn._to_linear, 64)
-        self.h1m = nn.Linear(2, 64)
+        self.h1s = nn.Linear(self.cnn._to_linear, 128)
         self.h1a = nn.Linear(action_dim, 128)
         self.h2 = nn.Linear(256, 128)
         self.fc = nn.Linear(128, 1)
 
         self.h1s.weight.data.normal_(0, 0.1)
-        self.h1m.weight.data.normal_(0, 0.1)
         self.h1a.weight.data.normal_(0, 0.1)
         self.h2.weight.data.normal_(0, 0.1)
         self.fc.weight.data.normal_(0, 0.1)
 
-    def forward(self, screen, mouse_pos, action):
+    def forward(self, screen, action):
         xs = self.cnn(screen)
         xs = F.relu(self.h1s(xs))
-        xm = F.relu(self.h1m(mouse_pos))
         xa = F.relu(self.h1a(action))
-        x = torch.cat((xs, xm, xa), dim=1)
+        x = torch.cat((xs, xa), dim=1)
         x = F.relu(self.h2(x))
         q_value = self.fc(x)
         return q_value

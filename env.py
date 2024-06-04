@@ -24,19 +24,21 @@ class OsuEnv(Env):
         self.screen_shape = (61, 81)
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
-        mouse_button_space = Discrete(2)
+        # mouse_button_space = Discrete(2)
         
-        self.observation_space = Dict({
-            'screen': screen_space,
-            'm_pos': self.action_space,
-            'key_pressed': mouse_button_space
-        })
+        # self.observation_space = Dict({
+        #     'screen': screen_space,
+        #     'm_pos': self.action_space,
+        #     'key_pressed': mouse_button_space
+        # })
         
-        self.state = {
-            'screen': np.zeros(self.screen_shape, dtype=np.float32),
-            'm_pos': np.array([self.action_range[0], self.action_range[1]], dtype=np.float32),
-            'key_pressed': 0
-        }
+        # self.state = {
+        #     'screen': np.zeros(self.screen_shape, dtype=np.float32),
+        #     'm_pos': np.array([self.action_range[0], self.action_range[1]], dtype=np.float32),
+        #     'key_pressed': 0
+        # }
+        self.observation_space = screen_space
+        self.state = np.zeros(self.screen_shape, dtype=np.float32)
         
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
@@ -82,19 +84,18 @@ class OsuEnv(Env):
         if action.ndim != 1:
             action = action.flatten()
 
-        # screen: (250, 55, 250+1040, 55+780)
-        # action: (x, y)
-        x, y = action
+        x = 310 + ((action[0] + 1) * (1610 / 2))
+        y = 70 + ((action[1] + 1) * (1045 / 2))
         x, y = round(x), round(y)
-        # m_pos = np.clip(m_pos + action, np.array([0, 0]), np.array([60, 80]))
-        # x, y = round(250 + 1040 * (m_pos[1] / 80)), round(55 + 780 * (m_pos[0] / 60))
 
         print(x, y)
         pyd.moveTo(x, y, _pause=False)
+        print(pyd.position())
 
-        self.state['screen'] = self._process_frame()
-        self.state['m_pos'] = action
-        self.state['key_pressed'] = 0
+        # self.state = self._process_frame()
+        # self.state['m_pos'] = action
+        # self.state['key_pressed'] = 0
+        self.state = self._process_frame()
         
         reward = self._calc_score()
         
@@ -109,11 +110,7 @@ class OsuEnv(Env):
 
     def reset(self):
         # reset environment
-        self.state = {
-            'screen': self.empty_frame,
-            'm_pos': np.array([self.reset_pos[0], self.reset_pos[1]], dtype=np.float32),
-            'key_pressed': 0
-        }
+        self.state = self.empty_frame
 
         self.hits_prev = (0, 0, 0, 0)
         self.song_completion_prev = float('-inf')
@@ -151,7 +148,7 @@ class OsuEnv(Env):
 
     def _update_opencv_window(self):
         try:
-            screen_np = np.repeat(np.repeat(self.state['screen'], 4, axis=0), 4, axis=1)
+            screen_np = np.repeat(np.repeat(self.state, 4, axis=0), 4, axis=1)
             cv2.imshow('Osu', screen_np)
             cv2.waitKey(1)
         except:
@@ -230,7 +227,7 @@ class OsuEnv(Env):
 
                 if self.sd['completion'] < self.song_completion_prev and self.in_game:
                     # reset time
-                    self.state['mouse_position'] = np.array([self.reset_pos[0], self.reset_pos[1]], dtype=np.float16)
+                    # self.state['mouse_position'] = np.array([self.reset_pos[0], self.reset_pos[1]], dtype=np.float16)
                     self.song_completion_prev = float('-inf')
                                 
                 elif self.sd['completion'] >= 100 and self.in_game:
