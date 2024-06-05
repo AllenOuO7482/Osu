@@ -157,6 +157,7 @@ cython_debug/
 # others
 *.npz
 test_file/
+pendulum.py
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

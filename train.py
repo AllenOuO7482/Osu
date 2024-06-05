@@ -6,6 +6,7 @@ import random
 import time
 import copy
 import matplotlib.pyplot as plt
+import multiprocessing as mp
 from collections import deque
 from IPython.display import clear_output
 
@@ -15,7 +16,7 @@ from models import Actor, Critic
 
 def get_batch(replay, batch_size, device):
     """
-    Get a batch of data from replay buffer.
+    ### Get a batch of data from replay buffer.
 
     # Params:
         ``replay``: deque, replay buffer
@@ -55,7 +56,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
     """
     train the agent using DDPG algorithm
     """
-    env = OsuEnv()
     for i in range(episodes):
         s = env.reset()
         if s.shape[0] != 1:
@@ -120,7 +120,7 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
                 # update target networks
                 target_update(A_main, A_target, tau)
                 target_update(Q_main, Q_target, tau)
-                sigma *= 0.9998 # anneal noise standard deviation
+                sigma *= 0.99995 # anneal noise standard deviation
 
             episode_reward += r
 
@@ -156,7 +156,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
     plt.show()
 
 def test_agent(model: nn.Module, time_steps=200, mode='human', display=True):
-    env = OsuEnv()
     s = env.reset()
     s = torch.tensor(s, dtype=torch.float32).to(device)
     for t in range(time_steps):
@@ -179,7 +178,14 @@ if __name__ == '__main__':
     # load replays from file
     replays = r.load()
 
-    env = OsuEnv()
+    raw_img_queue = mp.Queue(maxsize=3)
+    env = OsuEnv(raw_img_queue)
+    num_processes = 3
+    processes = []
+    for _ in range(num_processes):
+        p = mp.Process(target=env._get_screen, daemon=True)
+        p.start()
+        processes.append(p)
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -194,7 +200,7 @@ if __name__ == '__main__':
     gamma = 0.9  # discount factor
     time_steps = 200  # time steps per episode
     tau = 0.01 # target update rate
-    sigma = 3 # noise standard deviation
+    sigma = 0.1 # noise standard deviation
     buffer = 50000 # replay buffer size
     batch_size = 32 # batch size
     # replay = deque(maxlen=buffer) # replay buffer
@@ -218,13 +224,13 @@ if __name__ == '__main__':
     losses_a = []
     losses_c = []
     
-    opt_a = optim.Adam(A_main.parameters(), lr=1e-4) # Actor optimizer
+    opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
 
     loss_fn = nn.MSELoss()
     opt_c = optim.Adam(Q_main.parameters(), lr=1e-3) # Critic optimizer
 
     rewards = []
-
+    print('initialization done')
     # print(get_batch(replays, batch_size, device))
     # record game state
     # r.record_game_state()

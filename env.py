@@ -1,18 +1,17 @@
 from gym import Env
-from gym.spaces import Box, Discrete, Dict
-import numpy as np
+from gym.spaces import Box
 import cv2
 import mss
-import pydirectinput as pyd
 import time
 import os
-from collections import deque
-import pygetwindow as gw
 import threading
-from multiprocessing import Pool, Queue
+import numpy as np
+import pygetwindow as gw
+import pydirectinput as pyd
+import multiprocessing as mp
 
 class OsuEnv(Env):
-    def __init__(self, test_mode=False):
+    def __init__(self, raw_img_queue, test_mode=False):
         super(OsuEnv, self).__init__()
         self.action_range = (310, 70, 1610, 1045) # (x_min, y_min, x_max, y_max)
         self.action_space = Box(
@@ -24,25 +23,12 @@ class OsuEnv(Env):
         self.screen_shape = (61, 81)
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
-        # mouse_button_space = Discrete(2)
-        
-        # self.observation_space = Dict({
-        #     'screen': screen_space,
-        #     'm_pos': self.action_space,
-        #     'key_pressed': mouse_button_space
-        # })
-        
-        # self.state = {
-        #     'screen': np.zeros(self.screen_shape, dtype=np.float32),
-        #     'm_pos': np.array([self.action_range[0], self.action_range[1]], dtype=np.float32),
-        #     'key_pressed': 0
-        # }
         self.observation_space = screen_space
         self.state = np.zeros(self.screen_shape, dtype=np.float32)
         
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
-        self.raw_img_queue = deque(maxlen=2)
+        self.raw_img_queue = raw_img_queue
 
         self.empty_frame = np.zeros(self.screen_shape, dtype=np.float32)
         self.img_prev = np.zeros(self.screen_shape, dtype=np.float32)
@@ -67,13 +53,6 @@ class OsuEnv(Env):
         elif not stream_companion:
             raise Exception("StreamCompanion window is not found")
 
-        num_threads = 2
-        for i in range(num_threads):
-            p = threading.Thread(target=self._get_screen, daemon=True)
-            p.start()
-            for i in range(10000):
-                s = ''
-
         self.hits_prev = (0, 0, 0, 0)
         self.np_playing = ''
         self.song_completion_prev = float('-inf')
@@ -84,17 +63,18 @@ class OsuEnv(Env):
         if action.ndim != 1:
             action = action.flatten()
 
-        x = 310 + ((action[0] + 1) * (1610 / 2))
-        y = 70 + ((action[1] + 1) * (1045 / 2))
+        # field = (310, 70, 1610, 1045)
+        # (230, 40, 1310, 850)
+        field = (230, 40, 1080, 810)
+        
+        x = field[0] + ((action[0] + 1) * (field[2] / 2))
+        y = field[1] + ((action[1] + 1) * (field[3] / 2))
         x, y = round(x), round(y)
 
         print(x, y)
         pyd.moveTo(x, y, _pause=False)
-        print(pyd.position())
+        # print('move mouse to', pyd.position())
 
-        # self.state = self._process_frame()
-        # self.state['m_pos'] = action
-        # self.state['key_pressed'] = 0
         self.state = self._process_frame()
         
         reward = self._calc_score()
@@ -114,7 +94,8 @@ class OsuEnv(Env):
 
         self.hits_prev = (0, 0, 0, 0)
         self.song_completion_prev = float('-inf')
-        self.raw_img_queue.clear()
+        if not self.raw_img_queue.empty():
+            self.raw_img_queue.get()
         
         return self.state
 
@@ -124,26 +105,24 @@ class OsuEnv(Env):
         
     def _get_screen(self):
         bbox = (310, 70, 1610, 1045)
-        while True:
-            if not self.stop_mouse and not self.is_breaktime and self.sd['completion'] >= -0.1 and self.sd['completion'] < 100:
-                with mss.mss() as sct:
-                    # 截圖並轉換大小為 80x60
-                    img = sct.grab(bbox)
-                    self.raw_img_queue.append(img)
-            else:
-                self.raw_img_queue.clear()
-                time.sleep(1/30)
+        with mss.mss() as sct:
+            while True:
+                img = sct.grab(bbox)
+                img_np = np.array(img)  # Convert to numpy array for faster processing
+                if self.raw_img_queue.full():
+                    self.raw_img_queue.get()
+                self.raw_img_queue.put(img_np)
     
     def _process_frame(self):
-        if len(self.raw_img_queue) > 0:
-            img = self.raw_img_queue.popleft()
-            img = np.array(img)
+        if not self.raw_img_queue.empty():
+            img = self.raw_img_queue.get()
             img = cv2.resize(img, (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = np.array(img)
             self.img_prev = img
             return img
         else:
+            print('use previous frame')
             return self.img_prev
 
     def _update_opencv_window(self):
@@ -189,7 +168,7 @@ class OsuEnv(Env):
             else:
                 slide_score = 0
 
-            reward += score_delta[0] * 2000 + score_delta[1] * 1000 + score_delta[2] * 500 + score_delta[3] * (-100) + slide_score
+            reward += (score_delta[0] * 2000 + score_delta[1] * 1000 + score_delta[2] * 500 + score_delta[3] * (-500) + slide_score) / 2000
             # TODO Add combo
         # if np.array_equal(self.state['mouse_position'], np.array([0, 0], dtype=np.float16)):
         #     reward -= 1000
@@ -274,16 +253,11 @@ class OsuEnv(Env):
 if __name__ == '__main__':
     env = OsuEnv()
     time.sleep(3)
-    for i in range(20):
-        310, 70, 1610, 1045
-        pyd.moveTo(310, 70)
-        pyd.moveTo(1610, 70)
-        pyd.moveTo(1610, 1045)
-        pyd.moveTo(310, 1045)
-    # for i in range(1000):
-    #     action = env.action_space.sample()
-    #     state, reward, done, info = env.step(action)
-    #     env.render()
-    #     time.sleep(1/60)
+    num_processes = 3
+    processes = []
+    for _ in range(num_processes):
+        p = mp.Process(target=env._get_screen, daemon=True)
+        p.start()
+        processes.append(p)
     
     cv2.destroyAllWindows()
