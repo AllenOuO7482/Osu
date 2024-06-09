@@ -32,6 +32,7 @@ class OsuEnv(Env):
 
         self.empty_frame = np.zeros(self.screen_shape, dtype=np.float32)
         self.img_prev = np.zeros(self.screen_shape, dtype=np.float32)
+        self.is_capture = mp.Event()
         self.display = True
         self.game_end = True
         self.stop_mouse = True
@@ -94,6 +95,7 @@ class OsuEnv(Env):
 
         self.hits_prev = (0, 0, 0, 0)
         self.song_completion_prev = float('-inf')
+        self.is_capture.clear()
         if not self.raw_img_queue.empty():
             self.raw_img_queue.get()
         
@@ -168,7 +170,7 @@ class OsuEnv(Env):
             else:
                 slide_score = 0
 
-            reward += (score_delta[0] * 2000 + score_delta[1] * 1000 + score_delta[2] * 500 + score_delta[3] * (-500) + slide_score) / 2000
+            reward += (score_delta[0] * 2000 + score_delta[1] * 1000 + score_delta[2] * 100 + score_delta[3] * (-200) + slide_score) / 100
             # TODO Add combo
         # if np.array_equal(self.state['mouse_position'], np.array([0, 0], dtype=np.float16)):
         #     reward -= 1000
@@ -213,6 +215,7 @@ class OsuEnv(Env):
                     # Completed
                     self.game_end = True
                     self.stop_mouse = True
+                    self.is_capture.clear()
                     self.hits_prev = (0, 0, 0, 0)
                     self.song_completion_prev = float('-inf')
                     T += 1
@@ -224,6 +227,9 @@ class OsuEnv(Env):
                     self.game_end = False
                     self.stop_mouse = False
                     self.song_completion_prev = self.sd['completion']
+                    if self.sd['completion'] > -0.1:
+                        self.is_capture.set()
+
                     T += 1
                     if T % 30 == 0:
                         print('Smashing keys')
@@ -232,6 +238,7 @@ class OsuEnv(Env):
                     # Pausing and failed
                     self.game_end = False
                     self.stop_mouse = True
+                    self.is_capture.clear()
                     T += 1
                     if T % 30 == 0:
                         print('Pausing')

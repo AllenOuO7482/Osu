@@ -26,7 +26,7 @@ def get_batch(replay, batch_size, device):
     # Returns:
         ``s``: torch.tensor, state tensor with shape ``[batch_size, 1, 61, 81]``
         ``a``: torch.tensor, action tensor with shape ``[batch_size, 2]``
-        ``r``: torch.tensor, reward tensor with shape ``[batch_size]``
+        ``r``: torch.tensor, reward tensor with shape ``[batch_size, 1]``
         ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 1, 61, 81]``
     """
 
@@ -37,11 +37,18 @@ def get_batch(replay, batch_size, device):
     r = torch.tensor(np.array([r for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     s1 = torch.tensor(np.array([s1 for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
 
+    r = r.reshape(-1, 1)
+
     return s, a, r, s1
 
 def target_update(model_main, model_target, tau):
     """
-    update the target network using soft update
+    ### update the target network using soft update
+
+    # Params:
+        ``model_main``: nn.Module, main model
+        ``model_target``: nn.Module, target model
+        ``tau``: float, interpolation parameter
     """
     for w in model_target.state_dict().keys():
         # filter out ScreenModel keys, because they are only used in processing the screen
@@ -54,7 +61,18 @@ def target_update(model_main, model_target, tau):
 def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque, 
                 batch_size: int, gamma: float, tau: float, sigma: float):
     """
-    train the agent using DDPG algorithm
+    ### train the agent using DDPG algorithm
+
+    # Params:
+        ``episodes``: number of episodes to train
+        ``time_steps``: number of time steps per episode
+
+        ``buffer``: size of replay buffer
+        ``replays``: replay buffer
+        ``batch_size``: size of the batch
+        ``gamma``: discount factor
+        ``tau``: interpolation parameter
+        ``sigma``: noise standard deviation
     """
     for i in range(episodes):
         s = env.reset()
@@ -86,56 +104,68 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
 
             s1, r, done, _ = env.step(a0)
             env.render()
-            
+               
             s1 = np.expand_dims(s1, axis=0) # (61, 81) to (1, 61, 81)
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            replays.append((s.cpu().numpy(), a0, r / 10, s1.cpu().numpy()))
+            if (r == 0 and random.random() <= 0.2) or r != 0:
+                replays.append((s.cpu().numpy(), a0, r / 10, s1.cpu().numpy()))
 
             s = s1
 
-            if len(replays) >= buffer * 0.4:
+            if len(replays) >= buffer * 0.25:
                 # when buffer is full, start training
                 # sample a batch of data from replay buffer
+                # print('start training')
                 s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
                 a_bat = A_main(s_bat)
                 q_bat = Q_main(s_bat, a_bat)
                 # calculate loss and update Actor
+                # print('update actor')
                 loss_a = -torch.mean(q_bat)
+                print('loss_a:', loss_a)
                 opt_a.zero_grad()
-                loss_a.backward()
+                loss_a.backward() # CUDNN_ERROR
                 opt_a.step()
                 losses_a.append(loss_a.item())
                 # update Q-function
+                # print('update critic')
                 y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
                 with torch.no_grad():
                     a1_bat = A_target(s1_bat)
                     q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
                     y = r_bat + gamma * q1_bat
                 # calculate loss and update Critic
-                loss_c = loss_fn(y.detach(), y_hat)
+                # print('calculate loss')
+                loss_c = loss_fn(y.detach(), y_hat) # Something issue here
+                # print('loss_c:', loss_c, 'loss_c.item():', loss_c.item())
                 opt_c.zero_grad()
                 loss_c.backward()
                 opt_c.step()
                 losses_c.append(loss_c.item())
                 # update target networks
+                # print('update target networks')
                 target_update(A_main, A_target, tau)
                 target_update(Q_main, Q_target, tau)
-                sigma *= 0.99995 # anneal noise standard deviation
+                sigma *= 0.99998 # anneal noise standard deviation
+                hyperparam_dict['sigma'] = sigma
 
             episode_reward += r
 
-            frame_count += 1
-            if time.time() - now >= 1:
-                print(f'FPS: {frame_count}')
+            elapsed_time = time.time() - now
+            if elapsed_time >= 1:
+                print('FPS: %.2f' % (frame_count / elapsed_time))
                 now = time.time()
                 frame_count = 0
+            else:
+                frame_count += 1
 
         print('Episode:', i, ', reward: %i' % episode_reward, ', sigma: %.2f' % sigma)
         rewards.append(episode_reward)
 
-        if i > 1 and i % 5 == 0:
+        if i > 1 and i % 3 == 0:
             checkpoint = {
                 'epochs': i,
+                'hyperparameters': hyperparam_dict,
                 'actor_state_dict': A_main.state_dict(),
                 'critic_state_dict': Q_main.state_dict(),
                 'optimizer_a_state_dict': opt_a.state_dict(),
@@ -175,17 +205,9 @@ def test_agent(model: nn.Module, time_steps=200, mode='human', display=True):
     return t+1
 
 if __name__ == '__main__':
+    start_time = time.time()
     # load replays from file
     replays = r.load()
-
-    raw_img_queue = mp.Queue(maxsize=3)
-    env = OsuEnv(raw_img_queue)
-    num_processes = 3
-    processes = []
-    for _ in range(num_processes):
-        p = mp.Process(target=env._get_screen, daemon=True)
-        p.start()
-        processes.append(p)
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -194,17 +216,18 @@ if __name__ == '__main__':
         raise Exception("Cuda is not available. You should run on the GPU")
 
     # hyperparameters and initialization
-    state_space = env.observation_space.shape # state space size (1, 61, 81)
-    action_space = env.action_space.shape[0] # action space size
     episodes = 250 # episodes
     gamma = 0.9  # discount factor
     time_steps = 200  # time steps per episode
     tau = 0.01 # target update rate
-    sigma = 0.1 # noise standard deviation
-    buffer = 50000 # replay buffer size
+    sigma = 0.05 # noise standard deviation
+    buffer = 20000 # replay buffer size
     batch_size = 32 # batch size
     # replay = deque(maxlen=buffer) # replay buffer
-
+    hyperparam_dict = {
+        'episodes': episodes, 'time_steps': time_steps, 'buffer': buffer,
+        'batch_size': batch_size, 'gamma': gamma, 'tau': tau, 'sigma': sigma
+    }
     done = False
 
     state_dim = (61, 81, 1)     
@@ -223,14 +246,24 @@ if __name__ == '__main__':
 
     losses_a = []
     losses_c = []
-    
-    opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
+
+    opt_a = optim.Adam(A_main.parameters(), lr=1e-6) # Actor optimizer
 
     loss_fn = nn.MSELoss()
-    opt_c = optim.Adam(Q_main.parameters(), lr=1e-3) # Critic optimizer
+    opt_c = optim.Adam(Q_main.parameters(), lr=1e-5) # Critic optimizer
 
     rewards = []
-    print('initialization done')
+    
+    raw_img_queue = mp.Queue(maxsize=3)
+    env = OsuEnv(raw_img_queue)
+    num_processes = 3
+    processes = []
+    for _ in range(num_processes):
+        p = mp.Process(target=env._get_screen, daemon=True)
+        p.start()
+        processes.append(p)
+
+    print('initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
     # print(get_batch(replays, batch_size, device))
     # record game state
     # r.record_game_state()

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 class ScreenModel(nn.Module):
     def __init__(self, height, width, channels):
@@ -19,6 +18,7 @@ class ScreenModel(nn.Module):
             self.conv2
         )
         self._get_conv_output(height, width, channels)
+        self.apply(init_weights_he)
 
     def _get_conv_output(self, height, width, channels):
         # 建立假數據以便計算flatten層的輸入大小
@@ -42,23 +42,22 @@ class Actor(nn.Module):
         self.cnn = ScreenModel(state_dim[0], state_dim[1], state_dim[2])
         self.h1 = nn.Linear(self.cnn._to_linear, 128)
         self.h2 = nn.Linear(128, 64)
-        self.fc = nn.Linear(64, action_dim)
-
-        self.h1.weight.data.normal_(0, 1)
-        self.h2.weight.data.normal_(0, 1)
-        self.fc.weight.data.normal_(0, 1)
+        self.h3 = nn.Linear(64, 32)
+        self.fc = nn.Linear(32, action_dim)
+        self.apply(init_weights_he)
+        self.fc.apply(init_weight_xavier)
+        # self.h1.weight.data.normal_(0, 1)
+        # self.h2.weight.data.normal_(0, 1)
+        # self.h3.weight.data.normal_(0, 1)
+        # self.fc.weight.data.normal_(0, 1)
 
     def forward(self, screen):
+        x: torch.Tensor
         x = self.cnn(screen)
-        # print('cnn x:', x)
         x = F.relu(self.h1(x))
-        # print('h1 x:', x)
         x = F.relu(self.h2(x))
-        # print('h2 x:', x)
-        x = self.fc(x)
-        # print('fc x:', x)
-        x = torch.tanh(x)
-        # print('original x:', x)
+        x = F.relu(self.h3(x))
+        x = torch.tanh(self.fc(x))
         return x
 
 class Critic(nn.Module):
@@ -69,11 +68,11 @@ class Critic(nn.Module):
         self.h1a = nn.Linear(action_dim, 32)
         self.h2 = nn.Linear(64, 32)
         self.fc = nn.Linear(32, 1)
-
-        self.h1s.weight.data.normal_(0, 1)
-        self.h1a.weight.data.normal_(0, 1)
-        self.h2.weight.data.normal_(0, 1)
-        self.fc.weight.data.normal_(0, 1)
+        self.apply(init_weights_he)
+        # self.h1s.weight.data.normal_(0, 1)
+        # self.h1a.weight.data.normal_(0, 1)
+        # self.h2.weight.data.normal_(0, 1)
+        # self.fc.weight.data.normal_(0, 1)
 
     def forward(self, screen, action):
         xs = self.cnn(screen)
@@ -83,3 +82,23 @@ class Critic(nn.Module):
         x = F.relu(self.h2(x))
         q_value = self.fc(x)
         return q_value
+
+def init_weights_he(m):
+    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+
+def init_weight_xavier(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_normal_(m.weight, gain=nn.init.calculate_gain('relu'))
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+
+if __name__ == '__main__':
+    state_dim = (61, 81, 1)
+    action_dim = 2
+    actor = Actor(state_dim, action_dim)
+    critic = Critic(state_dim, action_dim)
+    print(actor)
+    print(critic)

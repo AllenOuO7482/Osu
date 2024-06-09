@@ -6,7 +6,7 @@ import numpy as np
 import os
 import multiprocessing
 from collections import deque
-
+import random
 import time
 from pathlib import Path
 import keyboard
@@ -68,14 +68,15 @@ def worker(q, q_lock, r_lock, replays):
                 std_replay_data = (s, action, reward, s1)
 
             with r_lock:
-                replays.append(std_replay_data)
+                if (reward == 0 and random.random() < 0.1) or reward != 0:
+                    replays.append(std_replay_data)
         except Exception as e:
             print(f"Error loading replay: {file_path}, Exception: {e}")
 
 def load(folder_path = "C:/Users/sword/.vscode/Osu/game_state"):
     manager = multiprocessing.Manager()
     file_queue = manager.Queue()
-    _replays = manager.list(deque(maxlen=50000))
+    _replays = manager.list(deque(maxlen=20000))
     queue_lock = manager.Lock()
     replays_lock = manager.Lock()
 
