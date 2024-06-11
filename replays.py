@@ -68,12 +68,12 @@ def worker(q, q_lock, r_lock, replays):
                 std_replay_data = (s, action, reward, s1)
 
             with r_lock:
-                if (reward == 0 and random.random() < 0.1) or reward != 0:
+                if (reward == 0 and random.random() < 0.05) or reward != 0:
                     replays.append(std_replay_data)
         except Exception as e:
             print(f"Error loading replay: {file_path}, Exception: {e}")
 
-def load(folder_path = "C:/Users/sword/.vscode/Osu/game_state"):
+def load(folder_path = "C:/Users/sword/.vscode/vtb/Osu/game_state"):
     manager = multiprocessing.Manager()
     file_queue = manager.Queue()
     _replays = manager.list(deque(maxlen=20000))

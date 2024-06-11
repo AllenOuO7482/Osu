@@ -3,16 +3,29 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
+import keyboard
 import time
 import copy
-import matplotlib.pyplot as plt
+import threading
+import pydirectinput as pyd
 import multiprocessing as mp
+import matplotlib.pyplot as plt
 from collections import deque
 from IPython.display import clear_output
 
 import replays as r
 from env import OsuEnv
 from models import Actor, Critic
+
+def detect_command(auto_choose_song):
+    while True:
+        if keyboard.is_pressed('alt+q'):
+            auto_choose_song.value = not auto_choose_song.value
+            print('auto_choose_song:', auto_choose_song.value)
+            while keyboard.is_pressed('alt+q'):
+                time.sleep(0.1)
+
+        time.sleep(0.05)
 
 def get_batch(replay, batch_size, device):
     """
@@ -40,6 +53,11 @@ def get_batch(replay, batch_size, device):
     r = r.reshape(-1, 1)
 
     return s, a, r, s1
+
+def choose_song():
+    time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
+    time.sleep(2), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
+    time.sleep(2), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
 
 def target_update(model_main, model_target, tau):
     """
@@ -90,11 +108,13 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
         
         now = time.time()
         frame_count = 0
-        while not done:
+        while not env.game_over:
             # in game and not pausing
             while env.stop_mouse or env.is_breaktime:
                 # pausing or break time
-                time.sleep(0.1)
+                time.sleep(0.05)
+                if auto_choose_song.value and env.stop_mouse and len(env.np_playing) <= 1:
+                    choose_song()
 
             # collect experience 
             a = A_main(s).detach()
@@ -107,50 +127,54 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
                
             s1 = np.expand_dims(s1, axis=0) # (61, 81) to (1, 61, 81)
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            if (r == 0 and random.random() <= 0.2) or r != 0:
+            if (r == 0 and random.random() <= 0.05) or r != 0:
                 replays.append((s.cpu().numpy(), a0, r / 10, s1.cpu().numpy()))
 
-            s = s1
+                if len(replays) >= buffer * 0.25:
+                    # when buffer is full, start training
+                    # sample a batch of data from replay buffer
+                    # print('start training')
+                    s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
+                    a_bat = A_main(s_bat)
+                    q_bat = Q_main(s_bat, a_bat)
+                    # calculate loss and update Actor
+                    # print('update actor')
+                    loss_a = -torch.mean(q_bat)
+                    opt_a.zero_grad()
+                    loss_a.backward() # CUDNN_ERROR
+                    opt_a.step()
+                    losses_a.append(loss_a.item())
+                    # update Q-function
+                    # print('update critic')
+                    y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
+                    with torch.no_grad():
+                        a1_bat = A_target(s1_bat)
+                        q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
+                        y = r_bat + gamma * q1_bat
+                    # calculate loss and update Critic
+                    # print('calculate loss')
+                    loss_c = loss_fn(y.detach(), y_hat) # Something issue here
+                    # print('loss_c:', loss_c, 'loss_c.item():', loss_c.item())
+                    opt_c.zero_grad()
+                    loss_c.backward()
+                    opt_c.step()
+                    losses_c.append(loss_c.item())
+                    # update target networks
+                    # print('update target networks')
+                    target_update(A_main, A_target, tau)
+                    target_update(Q_main, Q_target, tau)
+                    if r < 0:
+                        sigma *= 1.0005 # increase noise standard deviation
+                        hyperparam_dict['sigma'] = sigma
+                    elif r > 0:
+                        sigma *= 0.998 # anneal noise standard deviation
+                        hyperparam_dict['sigma'] = sigma
 
-            if len(replays) >= buffer * 0.25:
-                # when buffer is full, start training
-                # sample a batch of data from replay buffer
-                # print('start training')
-                s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-                a_bat = A_main(s_bat)
-                q_bat = Q_main(s_bat, a_bat)
-                # calculate loss and update Actor
-                # print('update actor')
-                loss_a = -torch.mean(q_bat)
-                print('loss_a:', loss_a)
-                opt_a.zero_grad()
-                loss_a.backward() # CUDNN_ERROR
-                opt_a.step()
-                losses_a.append(loss_a.item())
-                # update Q-function
-                # print('update critic')
-                y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
-                with torch.no_grad():
-                    a1_bat = A_target(s1_bat)
-                    q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
-                    y = r_bat + gamma * q1_bat
-                # calculate loss and update Critic
-                # print('calculate loss')
-                loss_c = loss_fn(y.detach(), y_hat) # Something issue here
-                # print('loss_c:', loss_c, 'loss_c.item():', loss_c.item())
-                opt_c.zero_grad()
-                loss_c.backward()
-                opt_c.step()
-                losses_c.append(loss_c.item())
-                # update target networks
-                # print('update target networks')
-                target_update(A_main, A_target, tau)
-                target_update(Q_main, Q_target, tau)
-                sigma *= 0.99998 # anneal noise standard deviation
-                hyperparam_dict['sigma'] = sigma
+                    print('sigma:', sigma)
 
             episode_reward += r
-
+            
+            s = s1
             elapsed_time = time.time() - now
             if elapsed_time >= 1:
                 print('FPS: %.2f' % (frame_count / elapsed_time))
@@ -159,10 +183,11 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
             else:
                 frame_count += 1
 
-        print('Episode:', i, ', reward: %i' % episode_reward, ', sigma: %.2f' % sigma)
+        env.game_over = False
+        print('Episode:', i, ', reward: %i' % episode_reward)
         rewards.append(episode_reward)
 
-        if i > 1 and i % 3 == 0:
+        if i > 1 and i % 2 == 0:
             checkpoint = {
                 'epochs': i,
                 'hyperparameters': hyperparam_dict,
@@ -173,11 +198,11 @@ def train_agent(episodes: int, time_steps: int, buffer: int, replays: deque,
                 'losses_a': losses_a,
                 'losses_c': losses_c
             }
-            torch.save(checkpoint, f'AI/Osu/saved_model/checkpoint_{i}.pth')
+            torch.save(checkpoint, f'{model_save_folder}/checkpoint_{i}.pth')
 
         clear_output(wait=True)
 
-    torch.save(A_main.state_dict(), 'AI/Osu/saved_model/actor_final.pth')
+    torch.save(A_main.state_dict(), f'{model_save_folder}/actor_final.pth')
 
     plt.figure(figsize=(6, 4))
     plt.plot(rewards)
@@ -208,6 +233,7 @@ if __name__ == '__main__':
     start_time = time.time()
     # load replays from file
     replays = r.load()
+    print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -220,7 +246,7 @@ if __name__ == '__main__':
     gamma = 0.9  # discount factor
     time_steps = 200  # time steps per episode
     tau = 0.01 # target update rate
-    sigma = 0.05 # noise standard deviation
+    sigma = 0.12 # noise standard deviation
     buffer = 20000 # replay buffer size
     batch_size = 32 # batch size
     # replay = deque(maxlen=buffer) # replay buffer
@@ -247,12 +273,15 @@ if __name__ == '__main__':
     losses_a = []
     losses_c = []
 
-    opt_a = optim.Adam(A_main.parameters(), lr=1e-6) # Actor optimizer
+    opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
 
     loss_fn = nn.MSELoss()
-    opt_c = optim.Adam(Q_main.parameters(), lr=1e-5) # Critic optimizer
+    opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
 
     rewards = []
+    print('model initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
+
+    model_save_folder = 'C:/Users/sword/.vscode/vtb/Osu/saved_model'
     
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
@@ -262,9 +291,12 @@ if __name__ == '__main__':
         p = mp.Process(target=env._get_screen, daemon=True)
         p.start()
         processes.append(p)
+    
+    auto_choose_song = mp.Value('b', False)
+    dc_process = mp.Process(target=detect_command, args=(auto_choose_song,), daemon=True)
+    dc_process.start()
 
-    print('initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
-    # print(get_batch(replays, batch_size, device))
+    print('all initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
     # record game state
     # r.record_game_state()
 

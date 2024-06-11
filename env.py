@@ -35,6 +35,7 @@ class OsuEnv(Env):
         self.is_capture = mp.Event()
         self.display = True
         self.game_end = True
+        self.game_over = False # True when game is over, else False
         self.stop_mouse = True
         self.in_game = False
         self.is_breaktime = False
@@ -72,7 +73,6 @@ class OsuEnv(Env):
         y = field[1] + ((action[1] + 1) * (field[3] / 2))
         x, y = round(x), round(y)
 
-        print(x, y)
         pyd.moveTo(x, y, _pause=False)
         # print('move mouse to', pyd.position())
 
@@ -163,14 +163,18 @@ class OsuEnv(Env):
         )
 
         reward = 0
-        if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0 or score_delta[-1] > 0:
-            self.hits_prev = hits_count
-            if score_delta[-1] == 10:
-                slide_score = 2000
-            else:
-                slide_score = 0
+        if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0:
+            reward += score_delta[0] * 20 + score_delta[1] * 10 + score_delta[2] * 1 + score_delta[3] * (-2)
 
-            reward += (score_delta[0] * 2000 + score_delta[1] * 1000 + score_delta[2] * 100 + score_delta[3] * (-200) + slide_score) / 100
+        else:
+            if score_delta[-1] == 10:
+                reward += 20 # slide reward
+
+            elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0 and score_delta[-1] < 1000:
+                reward += 4 # spinner reward
+            
+        self.hits_prev = hits_count
+
             # TODO Add combo
         # if np.array_equal(self.state['mouse_position'], np.array([0, 0], dtype=np.float16)):
         #     reward -= 1000
@@ -214,6 +218,7 @@ class OsuEnv(Env):
                 elif self.sd['completion'] >= 100 and self.in_game:
                     # Completed
                     self.game_end = True
+                    self.game_over = True
                     self.stop_mouse = True
                     self.is_capture.clear()
                     self.hits_prev = (0, 0, 0, 0)
@@ -250,6 +255,7 @@ class OsuEnv(Env):
             
             else:
                 self.game_end = True
+                self.game_over = False
                 self.stop_mouse = True
                 T += 1
                 if T % 30 == 0:
