@@ -134,7 +134,6 @@ class OsuEnv(Env):
         try:
             screen_np = self.new_state.squeeze()
             screen_np = np.repeat(np.repeat(screen_np, 4, axis=0), 4, axis=1)
-            print(screen_np.shape)
             cv2.imshow('Osu', screen_np)
             cv2.waitKey(1)
         except Exception as e:
@@ -169,7 +168,7 @@ class OsuEnv(Env):
 
         reward = 0
         if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0:
-            reward += score_delta[0] * 20 + score_delta[1] * 10 + score_delta[2] * 1 + score_delta[3] * (-2)
+            reward += score_delta[0] * 100 + score_delta[1] * 100 + score_delta[2] * 50 + score_delta[3] * (-2)
 
         else:
             if score_delta[-1] == 10:

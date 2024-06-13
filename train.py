@@ -60,8 +60,8 @@ def get_batch(replays: deque, batch_size, device):
 
 def choose_song():
     time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
-    time.sleep(1), pyd.click(x=494, y=808), print('click at 494, 808')
-    time.sleep(5), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
+    # time.sleep(1), pyd.click(x=494, y=808), print('click at 494, 808')
+    time.sleep(2), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
     time.sleep(1), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
 
 def target_update(model_main, model_target, tau):
@@ -73,9 +73,9 @@ def target_update(model_main, model_target, tau):
         ``model_target``: nn.Module, target model
         ``tau``: float, interpolation parameter
     """
-    for w in model_target.state_dict().keys():
-        eval('model_target.'+w+'.data.mul_((1-tau))')
-        eval('model_target.'+w+'.data.add_(tau*model_main.'+w+'.data)')
+    for target_param, main_param in zip(model_target.parameters(), model_main.parameters()):
+        target_param.data.copy_(tau * main_param.data + (1 - tau) * target_param.data)
+
 
 def train_agent(episodes: int, time_steps: int, buffer: int, 
                 batch_size: int, gamma: float, tau: float, sigma: float):
@@ -204,49 +204,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
     plt.show()
 
 if __name__ == '__main__':
-    start_time = time.time()
-
     if torch.cuda.is_available():
         device = torch.device("cuda")
         print("Cuda is available. Running on the GPU")
     else:
         raise Exception("Cuda is not available. You should run on the GPU")
 
-    hyperparam_dict = {
-        'episodes': 250, 'time_steps': 200, 'buffer': 20000,
-        'batch_size': 16, 'gamma': 0.9, 'tau': 0.01, 'sigma': 0.12
-    }
-    # hyperparameters and initialization
-    episodes = hyperparam_dict['episodes']      # episodes
-    gamma = hyperparam_dict['gamma']            # discount factor
-    time_steps = hyperparam_dict['time_steps']  # time steps per episode
-    tau = hyperparam_dict['tau']                # target update rate
-    sigma = hyperparam_dict['sigma']            # noise standard deviation
-    buffer = hyperparam_dict['buffer']          # replay buffer size
-    batch_size = hyperparam_dict['batch_size']  # batch size
-    replays = r.load(buffer)                    # deque of replays
-
-    # replays = deque(maxlen=buffer)
-    print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
-
-    state_dim = (4, 60, 80)
-    action_dim = 2
-    act_low = np.array([-1, -1], dtype=np.float32)
-    act_high = np.array([1, 1], dtype=np.float32)
-
-    # define actor-critic models
-    A_main = Actor(batch_size, state_dim, action_dim).to(device)
-    Q_main = Critic(batch_size, state_dim, action_dim).to(device)
-
-    losses_a = []
-    losses_c = []
-
-    opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
-    opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
-    loss_fn = nn.MSELoss() # Critic loss function
-
-    rewards = []
-    model_folder = Path(__file__).parent / 'saved_models'
     while True:
         _ = input("load a saved model? (y/n): ")
         if _ == 'y' or _ == 'Y':
@@ -259,25 +222,71 @@ if __name__ == '__main__':
         else:
             print("Invalid input. Please enter 'y' or 'n'.")
     
+    start_time = time.time()
+    # define state, action and reward 
+    state_dim = (4, 60, 80)
+    action_dim = 2
+    act_low = np.array([-1, -1], dtype=np.float32)
+    act_high = np.array([1, 1], dtype=np.float32)
+    rewards = []
+    model_folder = Path(__file__).parent / 'saved_models'
+
     if is_load:
+        # define actor-critic models with a saved model
         checkpoint = torch.load(f'{model_folder}/{model_name}.pth')
         epoch = checkpoint['epochs']
         hyperparam_dict = checkpoint['hyperparameters']
+
+        # define actor-critic models
+        A_main = Actor(state_dim, action_dim).to(device)
+        Q_main = Critic(state_dim, action_dim).to(device)
+        opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
+        opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
+        loss_fn = nn.MSELoss() # Critic loss function
+
+        # load state_dict, optimizer and losses
         A_main.load_state_dict(checkpoint['actor_state_dict'])
         Q_main.load_state_dict(checkpoint['critic_state_dict'])
         opt_a.load_state_dict(checkpoint['optimizer_a_state_dict'])
         opt_c.load_state_dict(checkpoint['optimizer_c_state_dict'])
         losses_a = checkpoint['losses_a']
         losses_c = checkpoint['losses_c']
-    else:
-        epoch = 0
 
+    else:
+        # define actor-critic models without a saved model
+        epoch = 0
+        hyperparam_dict = {
+            'episodes': 250, 'time_steps': 200, 'buffer': 20000,
+            'batch_size': 32, 'gamma': 0.9, 'tau': 0.01, 'sigma': 0.12
+        }
+        # define actor-critic models with default hyperparameters
+        A_main = Actor(state_dim, action_dim).to(device)
+        Q_main = Critic(state_dim, action_dim).to(device)
+        opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
+        opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
+        loss_fn = nn.MSELoss() # Critic loss function
+        
+        losses_a = []
+        losses_c = []
+
+    # define target networks
     A_target = copy.deepcopy(A_main).to(device)
     A_target.load_state_dict(A_main.state_dict())
     Q_target = copy.deepcopy(Q_main).to(device)
     Q_target.load_state_dict(Q_main.state_dict())
-
     print('model initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
+
+    # hyperparameters and replays
+    episodes = hyperparam_dict['episodes']      # episodes
+    gamma = hyperparam_dict['gamma']            # discount factor
+    time_steps = hyperparam_dict['time_steps']  # time steps per episode
+    tau = hyperparam_dict['tau']                # target update rate
+    sigma = hyperparam_dict['sigma']            # noise standard deviation
+    buffer = hyperparam_dict['buffer']          # replay buffer size
+    batch_size = hyperparam_dict['batch_size']  # batch size
+    replays = r.load(buffer)                    # deque of replays
+    # replays = deque(maxlen=buffer)
+    print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
     
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)

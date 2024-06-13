@@ -46,7 +46,7 @@ def record_game_state():
             s1 = np.delete(s, 0, axis=0) # (3, 60, 80)
             s1 = np.concatenate((s1, new_s), axis=0) # (4, 60, 80)
 
-            batch = {'s': s, 'a': a, 'r': [r], 's1': s1} # s, a, r, s1
+            batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
             np.savez_compressed(Path(__file__).parent / 'game_state' / f'game_state_{replay_count+1}.npz', batch)
             replay_count += 1
             s = s1

@@ -17,13 +17,17 @@ def init_weight_xavier(m):
             nn.init.constant_(m.bias, 0)
 
 class Actor(nn.Module):
-    def __init__(self, batch_size, s_dim, a_dim):
+    def __init__(self, s_dim, a_dim):
         # s_dim = (4, 60, 80) 4 frames, 60x80 pixels
         super(Actor, self).__init__()
-        self.batch_size = batch_size
-        self.conv1 = nn.Conv2d(s_dim[0], 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
+        # self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
+        # self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        # self.bn3 = nn.BatchNorm2d(32)
+        # self.conv1 = nn.Conv2d(s_dim[0], 8, kernel_size=5, stride=2)
+        # self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1)
 
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2])
         self.h1 = nn.Linear(to_linear, 512)
@@ -43,18 +47,20 @@ class Actor(nn.Module):
     def forward(self, x: torch.Tensor):
         # 223 to 255 -> -1 to 255 -> 0 to 255
         # to reduce distractions, enhance feautres
-        x = torch.where(x < 223, torch.tensor(0, dtype=x.dtype, device=x.device), x)
-        mask = (x >= 223)
-        x[mask] = ((x[mask] - 223) / (255 - 223)) * 256 - 1
-        x = torch.where(x < 0, torch.tensor(0, dtype=x.dtype, device=x.device), x)
+        if x.ndim == 3:
+            x = x.unsqueeze(0)
+        # x = torch.where(x < 223, torch.tensor(0, dtype=x.dtype, device=x.device), x)
+        # mask = (x >= 223)
+        # x[mask] = ((x[mask] - 223) / (255 - 223)) * 256 - 1
+        # x = torch.where(x < 0, torch.tensor(0, dtype=x.dtype, device=x.device), x)
         x = x / 255.0
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        if x.size(0) == self.batch_size:
-            x = x.view(self.batch_size, -1)
+        if x.ndim == 4:
+            x = x.view(x.size(0), -1)
         else:
-            x = x.view(1, -1)
+            raise ValueError('Invalid input shape in actor')
         x = F.relu(self.h1(x))
         x = torch.tanh(self.fc(x))
 
@@ -108,12 +114,16 @@ class Actor(nn.Module):
     #     return output
 
 class Critic(nn.Module):
-    def __init__(self, batch_size, s_dim, a_dim):
+    def __init__(self, s_dim, a_dim):
         super(Critic, self).__init__()
-        self.batch_size = batch_size
-        self.conv1 = nn.Conv2d(s_dim[0], 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
+        # self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
+        # self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        # self.bn3 = nn.BatchNorm2d(32)
+        # self.conv1 = nn.Conv2d(s_dim[0], 8, kernel_size=5, stride=2)
+        # self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1)
 
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2])
         self.h1s = nn.Linear(to_linear, 32)
@@ -125,18 +135,20 @@ class Critic(nn.Module):
 
     def forward(self, s: torch.Tensor, a: torch.Tensor):
         # 223 to 255 -> -1 to 255 -> 0 to 255
-        s = torch.where(s < 223, torch.tensor(0, dtype=s.dtype, device=s.device), s)
-        mask = (s >= 223)
-        s[mask] = ((s[mask] - 223) / (255 - 223)) * 256 - 1
-        s = torch.where(s < 0, torch.tensor(0, dtype=s.dtype, device=s.device), s)
+        if s.ndim == 3:
+            s = s.unsqueeze(0)
+        # s = torch.where(s < 223, torch.tensor(0, dtype=s.dtype, device=s.device), s)
+        # mask = (s >= 223)
+        # s[mask] = ((s[mask] - 223) / (255 - 223)) * 256 - 1
+        # s = torch.where(s < 0, torch.tensor(0, dtype=s.dtype, device=s.device), s)
         xs = s / 255.0
         xs = F.relu(self.conv1(xs))
         xs = F.relu(self.conv2(xs))
         xs = F.relu(self.conv3(xs))
-        if xs.size(0) == self.batch_size:
-            xs = xs.view(self.batch_size, -1)
+        if xs.ndim == 4:
+            xs = xs.view(xs.size(0), -1)
         else:
-            xs = xs.view(1, -1)
+            raise ValueError('Invalid input shape in critic')
         xs = F.relu(self.h1s(xs))
         xa = F.relu(self.h1a(a))
         x = torch.cat((xs, xa), dim=1)
