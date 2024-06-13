@@ -156,7 +156,9 @@ cython_debug/
 
 # others
 *.npz
+*.pth
 test_file/
+saved_model with 1 input/
 pendulum.py
 
 # PyCharm

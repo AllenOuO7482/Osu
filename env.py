@@ -20,17 +20,18 @@ class OsuEnv(Env):
             shape=(2,)
         )
         
-        self.screen_shape = (61, 81)
+        self.screen_shape = (60, 80)
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state = np.zeros(self.screen_shape, dtype=np.float32)
+        self.state_shape = (4, 60, 80)
+        self.state = np.zeros(self.state_shape, dtype=np.float32)
         
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
         self.raw_img_queue = raw_img_queue
 
-        self.empty_frame = np.zeros(self.screen_shape, dtype=np.float32)
+        self.empty_frame = np.zeros(self.state_shape, dtype=np.float32)
         self.img_prev = np.zeros(self.screen_shape, dtype=np.float32)
         self.is_capture = mp.Event()
         self.display = True
@@ -76,8 +77,10 @@ class OsuEnv(Env):
         pyd.moveTo(x, y, _pause=False)
         # print('move mouse to', pyd.position())
 
-        self.state = self._process_frame()
-        
+        self.new_state = self._process_frame() # now state
+        self.new_state = self.new_state.reshape(1, 60, 80) # reshape to (1, 60, 80)
+        self.state = np.delete(self.state, 0, axis=0)
+        self.state = np.concatenate((self.state, self.new_state), axis=0) # concatenate to state
         reward = self._calc_score()
         
         if self.game_end and self.in_game:
@@ -129,10 +132,12 @@ class OsuEnv(Env):
 
     def _update_opencv_window(self):
         try:
-            screen_np = np.repeat(np.repeat(self.state, 4, axis=0), 4, axis=1)
+            screen_np = self.new_state.squeeze()
+            screen_np = np.repeat(np.repeat(screen_np, 4, axis=0), 4, axis=1)
+            print(screen_np.shape)
             cv2.imshow('Osu', screen_np)
             cv2.waitKey(1)
-        except:
+        except Exception as e:
             print("update screen failed")
     
     def _record_game_state(self):
@@ -170,20 +175,10 @@ class OsuEnv(Env):
             if score_delta[-1] == 10:
                 reward += 20 # slide reward
 
-            elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0 and score_delta[-1] < 1000:
+            elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0:
                 reward += 4 # spinner reward
             
         self.hits_prev = hits_count
-
-            # TODO Add combo
-        # if np.array_equal(self.state['mouse_position'], np.array([0, 0], dtype=np.float16)):
-        #     reward -= 1000
-        # if np.array_equal(self.state['mouse_position'], np.array([0, 80], dtype=np.float16)):
-        #     reward -= 1000
-        # if np.array_equal(self.state['mouse_position'], np.array([60, 0], dtype=np.float16)):
-        #     reward -= 1000
-        # if np.array_equal(self.state['mouse_position'], np.array([60, 80], dtype=np.float16)):
-        #     reward -= 1000
 
         return reward
 
@@ -212,7 +207,6 @@ class OsuEnv(Env):
 
                 if self.sd['completion'] < self.song_completion_prev and self.in_game:
                     # reset time
-                    # self.state['mouse_position'] = np.array([self.reset_pos[0], self.reset_pos[1]], dtype=np.float16)
                     self.song_completion_prev = float('-inf')
                                 
                 elif self.sd['completion'] >= 100 and self.in_game:
@@ -261,16 +255,21 @@ class OsuEnv(Env):
                 if T % 30 == 0:
                     print("Choosing a beatmap...")
             
-            time.sleep(0.1)
+            time.sleep(1/15) # TODO Harder map need less time to pausing
 
 if __name__ == '__main__':
-    env = OsuEnv()
-    time.sleep(3)
+    raw_img_queue = mp.Queue(maxsize=3)
+    env = OsuEnv(raw_img_queue)
     num_processes = 3
     processes = []
-    for _ in range(num_processes):
+    for i in range(num_processes):
         p = mp.Process(target=env._get_screen, daemon=True)
         p.start()
         processes.append(p)
     
+    while True:
+        env.new_state = env._process_frame()
+        env.render()
+        time.sleep(0.01)
+
     cv2.destroyAllWindows()
