@@ -1,5 +1,6 @@
 from gym import Env
 from gym.spaces import Box
+from collections import deque
 import cv2
 import mss
 import time
@@ -24,8 +25,11 @@ class OsuEnv(Env):
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state_shape = (4, 60, 80)
+        self.state_shape = (1, 60, 80)
         self.state = np.zeros(self.state_shape, dtype=np.float32)
+        self.action_queue = deque(maxlen=2)
+        # self.action_delay = 0.02 # delay between actions in seconds
+        # self.action_data = None
         
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
@@ -62,26 +66,30 @@ class OsuEnv(Env):
         p1 = threading.Thread(target=self._detect_game_state, daemon=True)
         p1.start()
 
-    def step(self, action: np.ndarray):
-        if action.ndim != 1:
-            action = action.flatten()
+    def step(self, action_: np.ndarray):
+        if action_.ndim != 1:
+            action_ = action_.flatten()
 
-        # field = (310, 70, 1610, 1045)
-        # (230, 40, 1310, 850)
-        field = (230, 40, 1080, 810)
-        
-        x = field[0] + ((action[0] + 1) * (field[2] / 2))
-        y = field[1] + ((action[1] + 1) * (field[3] / 2))
-        x, y = round(x), round(y)
+        # add an action queue to delay the action
+        self.action_queue.append(action_)
 
-        pyd.moveTo(x, y, _pause=False)
-        # print('move mouse to', pyd.position())
+        if len(self.action_queue) == 2:
+            action = self.action_queue.popleft()
+            # field = (310, 70, 1610, 1045)
+            # (230, 40, 1310, 850)
+            field = (230, 40, 1080, 810)
+            
+            x = field[0] + ((action[0] + 1) * (field[2] / 2))
+            y = field[1] + ((action[1] + 1) * (field[3] / 2))
+            x, y = round(x), round(y)
 
-        self.new_state = self._process_frame() # now state
-        self.new_state = self.new_state.reshape(1, 60, 80) # reshape to (1, 60, 80)
-        self.state = np.delete(self.state, 0, axis=0)
-        self.state = np.concatenate((self.state, self.new_state), axis=0) # concatenate to state
+            pyd.moveTo(x, y, _pause=False)
+            # print('move mouse to', pyd.position())
+
+        self.state = self._process_frame() # now state
+        self.state = self.state.reshape(1, 60, 80) # reshape to (1, 60, 80)
         reward = self._calc_score()
+        reward = max(-1, min(1, reward))
         
         if self.game_end and self.in_game:
             done = True # TODO: add game end detection
@@ -132,12 +140,12 @@ class OsuEnv(Env):
 
     def _update_opencv_window(self):
         try:
-            screen_np = self.new_state.squeeze()
+            screen_np = self.state.squeeze()
             screen_np = np.repeat(np.repeat(screen_np, 4, axis=0), 4, axis=1)
             cv2.imshow('Osu', screen_np)
             cv2.waitKey(1)
         except Exception as e:
-            print("update screen failed")
+            print("update screen failed", e)
     
     def _record_game_state(self):
         pass
@@ -167,19 +175,19 @@ class OsuEnv(Env):
         )
 
         reward = 0
-        if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0:
-            reward += score_delta[0] * 100 + score_delta[1] * 100 + score_delta[2] * 50 + score_delta[3] * (-2)
+        if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0 and not self.game_end:
+            reward += score_delta[0] * 1 + score_delta[1] * 1 + score_delta[2] * 0.5 + score_delta[3] * (-0.5)
 
-        else:
+        elif score_delta[-1] > 0:
             if score_delta[-1] == 10:
-                reward += 20 # slide reward
+                reward += 1 # slide reward
 
             elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0:
-                reward += 4 # spinner reward
+                reward += 0.5 # spinner reward
             
         self.hits_prev = hits_count
 
-        return reward
+        return float(reward)
 
     def _detect_game_state(self):
         stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
@@ -208,7 +216,7 @@ class OsuEnv(Env):
                     # reset time
                     self.song_completion_prev = float('-inf')
                                 
-                elif self.sd['completion'] >= 100 and self.in_game:
+                elif self.sd['completion'] >= 99.99 and self.in_game:
                     # Completed
                     self.game_end = True
                     self.game_over = True
@@ -267,7 +275,7 @@ if __name__ == '__main__':
         processes.append(p)
     
     while True:
-        env.new_state = env._process_frame()
+        env.state = env._process_frame()
         env.render()
         time.sleep(0.01)
 

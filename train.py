@@ -6,6 +6,7 @@ import random
 import keyboard
 import time
 import copy
+import cv2
 import threading
 import pydirectinput as pyd
 import multiprocessing as mp
@@ -19,6 +20,14 @@ from env import OsuEnv
 from models import Actor, Critic
 
 def detect_command(replays, auto_choose_song, enable_save_replay):
+    """
+    ### Detect keyboard commands and update the corresponding variables.
+
+    # Params:
+        ``replays``: deque, replay buffer
+        ``auto_choose_song``: multiprocessing.Value, whether to automatically choose song
+        ``enable_save_replay``: multiprocessing.Value, whether to save replays
+    """
     while True:
         if keyboard.is_pressed('alt+q'):
             auto_choose_song.value = not auto_choose_song.value
@@ -43,10 +52,10 @@ def get_batch(replays: deque, batch_size, device):
         ``device``: torch.device, device to store the tensors
 
     # Returns:
-        ``s``: torch.tensor, state tensor with shape ``[batch_size, 4, 60, 80]``
+        ``s``: torch.tensor, state tensor with shape ``[batch_size, 1, 60, 80]``
         ``a``: torch.tensor, action tensor with shape ``[batch_size, 2]``
         ``r``: torch.tensor, reward tensor with shape ``[batch_size, 1]``
-        ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 4, 60, 80]``
+        ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 1, 60, 80]``
     """
 
     batch = random.sample(replays, batch_size)
@@ -60,9 +69,25 @@ def get_batch(replays: deque, batch_size, device):
 
 def choose_song():
     time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
-    # time.sleep(1), pyd.click(x=494, y=808), print('click at 494, 808')
-    time.sleep(2), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
-    time.sleep(1), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
+    time.sleep(1), pyd.click(x=494, y=808), print('click at 494, 808')
+    time.sleep(6), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
+    time.sleep(4), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
+
+def write_log_file(source_file, target_file):
+    try:
+        # read content from source file
+        with open(source_file, 'r', encoding='utf-8') as src:
+            content = src.read()
+        
+        # Write content to target file
+        with open(target_file, 'a', encoding='utf-8') as tgt:
+            tgt.write(content + '\n')
+        
+        print(f"Successfully appended {source_file} to {target_file}")
+    except FileNotFoundError as e:
+        print(f"File not found: {e}")
+    except IOError as e:
+        print(f"I/O error: {e}")
 
 def target_update(model_main, model_target, tau):
     """
@@ -94,8 +119,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
         ``sigma``: noise standard deviation
     """
 
+    save_cd = time.time()
+    source_file = 'C:/Program Files (x86)/StreamCompanion/Files/output_log.txt'
+    target_file = 'C:/Users/sword/.vscode/vtb/Osu/score_log.txt'
+
     for i in range(epoch, episodes):
-        s = env.reset() # (4, 60, 80)
+        s = env.reset() # (1, 60, 80)
         s = torch.tensor(s, dtype=torch.float32).to(device)
 
         episode_reward = 0
@@ -122,11 +151,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
             except: pass
 
             s1, r, done, _ = env.step(a0)
-            env.render()
+            # env.render()
 
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            if (r == 0 and random.random() <= 0.05) or r != 0:
+            if ((r == 0 and random.random() <= 0.05) or r != 0) and r < 1000:
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
+                print('reward:', r)
 
                 if len(replays) >= buffer * 0.25:
                     # when buffer is full, start training
@@ -155,12 +185,14 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
                     # update target networks
                     target_update(A_main, A_target, tau)
                     target_update(Q_main, Q_target, tau)
-
                     if r < 0:
-                        sigma *= 1.001 # increase noise standard deviation
+                        sigma *= 1.0005 # increase noise standard deviation
                         hyperparam_dict['sigma'] = sigma
-                    elif r > 0:
-                        sigma *= 0.996 # anneal noise standard deviation
+                    elif r == 1 and sigma > 0.07:
+                        sigma *= 0.997 # anneal noise standard deviation
+                        hyperparam_dict['sigma'] = sigma
+                    elif sigma < 0.07:
+                        sigma = 0.07 # minimum noise standard deviation
                         hyperparam_dict['sigma'] = sigma
 
                     print('sigma:', sigma)
@@ -178,9 +210,10 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
 
         env.game_over = False
         print('Episode:', i, ', reward: %i' % episode_reward)
+        write_log_file(source_file, target_file)
         rewards.append(episode_reward)
 
-        if i > 1 and i % 2 == 0:
+        if i > 1 and i % 2 == 0 and time.time() - save_cd >= 20:
             checkpoint = {
                 'epochs': i+1,
                 'hyperparameters': hyperparam_dict,
@@ -192,8 +225,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
                 'losses_c': losses_c
             }
             torch.save(checkpoint, f'{model_folder}/checkpoint_{i}.pth')
+            save_cd = time.time()
 
         clear_output(wait=True)
+
+        while env.game_over:
+            time.sleep(0.1)
 
     torch.save(A_main.state_dict(), f'{model_folder}/actor_final.pth')
 
@@ -224,7 +261,7 @@ if __name__ == '__main__':
     
     start_time = time.time()
     # define state, action and reward 
-    state_dim = (4, 60, 80)
+    state_dim = (1, 60, 80)
     action_dim = 2
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
@@ -257,7 +294,7 @@ if __name__ == '__main__':
         epoch = 0
         hyperparam_dict = {
             'episodes': 250, 'time_steps': 200, 'buffer': 20000,
-            'batch_size': 32, 'gamma': 0.9, 'tau': 0.01, 'sigma': 0.12
+            'batch_size': 32, 'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
@@ -268,6 +305,18 @@ if __name__ == '__main__':
         
         losses_a = []
         losses_c = []
+
+        checkpoint = {
+            'epochs': 0,
+            'hyperparameters': hyperparam_dict,
+            'actor_state_dict': A_main.state_dict(),
+            'critic_state_dict': Q_main.state_dict(),
+            'optimizer_a_state_dict': opt_a.state_dict(),
+            'optimizer_c_state_dict': opt_c.state_dict(),
+            'losses_a': losses_a,
+            'losses_c': losses_c
+        }
+        torch.save(checkpoint, f'{model_folder}/checkpoint_0.pth')
 
     # define target networks
     A_target = copy.deepcopy(A_main).to(device)
@@ -287,7 +336,7 @@ if __name__ == '__main__':
     replays = r.load(buffer)                    # deque of replays
     # replays = deque(maxlen=buffer)
     print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
-    
+
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
     num_processes = 3
@@ -306,3 +355,5 @@ if __name__ == '__main__':
  
     # train agent with replays
     train_agent(episodes, time_steps, buffer, batch_size, gamma, tau, sigma)
+
+cv2.destroyAllWindows()

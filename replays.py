@@ -60,8 +60,7 @@ def load_worker(q, q_lock, r_lock, replays):
                 if not q.empty():
                     file_path = q.get()
                 else:
-                    print("Queue empty, exiting worker")
-                    return
+                    return # no more replays to load
 
             with np.load(file_path, allow_pickle=True) as replay:
                 replay_data = replay['arr_0'].item()
@@ -78,6 +77,9 @@ def load_worker(q, q_lock, r_lock, replays):
             print(f"Error loading replay: {file_path}, Exception: {e}")
 
 def load(buffer, folder_path = "C:/Users/sword/.vscode/vtb/Osu/Replays"):
+    """
+    load replays from a folder
+    """
     manager = mp.Manager()
     file_queue = manager.Queue()
     _replays = manager.list(deque(maxlen=buffer))
