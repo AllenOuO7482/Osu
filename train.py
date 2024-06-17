@@ -13,7 +13,7 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 from pathlib import Path
 from collections import deque
-from IPython.display import clear_output
+from IPython.display import clear_output 
 
 import replays as r
 from env import OsuEnv
