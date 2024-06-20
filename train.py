@@ -7,11 +7,11 @@ import keyboard
 import time
 import copy
 import cv2
+import os
 import threading
 import pydirectinput as pyd
 import multiprocessing as mp
 import matplotlib.pyplot as plt
-from pathlib import Path
 from collections import deque
 from IPython.display import clear_output 
 
@@ -69,7 +69,7 @@ def get_batch(replays: deque, batch_size, device):
 
 def choose_song():
     time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
-    time.sleep(1), pyd.click(x=494, y=808), print('click at 494, 808')
+    time.sleep(1), pyd.click(x=494, y=808), print('choose a random song')
     time.sleep(6), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
     time.sleep(4), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
 
@@ -119,19 +119,17 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
         ``sigma``: noise standard deviation
     """
 
-    save_cd = time.time()
     source_file = 'C:/Program Files (x86)/StreamCompanion/Files/output_log.txt'
     target_file = 'C:/Users/sword/.vscode/vtb/Osu/score_log.txt'
 
     for i in range(epoch, episodes):
-        s = env.reset() # (1, 60, 80)
+        s = env.reset() # (2, 60, 80)
         s = torch.tensor(s, dtype=torch.float32).to(device)
+        if not dc_process.is_alive():
+            dc_process.start()
 
         episode_reward = 0
         done = False
-        while len(env.np_playing) <= 3:
-            # not in game
-            time.sleep(0.1)
         
         now = time.time()
         frame_count = 0
@@ -140,8 +138,8 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
             while env.stop_mouse or env.is_breaktime:
                 # pausing or break time
                 time.sleep(0.05)
-                if auto_choose_song.value and env.stop_mouse and len(env.np_playing) <= 1:
-                    choose_song()
+                if env.sd['status'] == 'ResultsScreen' and auto_choose_song.value:
+                    choose_song() # ?
 
             # collect experience 
             a = A_main(s).detach()
@@ -188,11 +186,11 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
                     if r < 0:
                         sigma *= 1.0005 # increase noise standard deviation
                         hyperparam_dict['sigma'] = sigma
-                    elif r == 1 and sigma > 0.07:
+                    elif r == 1 and sigma > 0.05:
                         sigma *= 0.997 # anneal noise standard deviation
                         hyperparam_dict['sigma'] = sigma
-                    elif sigma < 0.07:
-                        sigma = 0.07 # minimum noise standard deviation
+                    elif sigma < 0.05:
+                        sigma = 0.05 # minimum noise standard deviation
                         hyperparam_dict['sigma'] = sigma
 
                     print('sigma:', sigma)
@@ -213,7 +211,7 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
         write_log_file(source_file, target_file)
         rewards.append(episode_reward)
 
-        if i > 1 and i % 2 == 0 and time.time() - save_cd >= 20:
+        if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.25:
             checkpoint = {
                 'epochs': i+1,
                 'hyperparameters': hyperparam_dict,
@@ -225,7 +223,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int,
                 'losses_c': losses_c
             }
             torch.save(checkpoint, f'{model_folder}/checkpoint_{i}.pth')
-            save_cd = time.time()
 
         clear_output(wait=True)
 
@@ -261,12 +258,15 @@ if __name__ == '__main__':
     
     start_time = time.time()
     # define state, action and reward 
-    state_dim = (1, 60, 80)
+    state_dim = (2, 60, 80)
     action_dim = 2
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
     rewards = []
-    model_folder = Path(__file__).parent / 'saved_models'
+    model_folder = os.path.join(os.path.dirname(__file__), 'saved_models')
+    replays_folder = os.path.join(os.path.dirname(__file__), 'Replays')
+    os.makedirs(model_folder, exist_ok=True)
+    os.makedirs(replays_folder, exist_ok=True)
 
     if is_load:
         # define actor-critic models with a saved model

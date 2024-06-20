@@ -25,7 +25,7 @@ class OsuEnv(Env):
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state_shape = (1, 60, 80)
+        self.state_shape = (2, 60, 80)
         self.state = np.zeros(self.state_shape, dtype=np.float32)
         self.action_queue = deque(maxlen=2)
         # self.action_delay = 0.02 # delay between actions in seconds
@@ -33,18 +33,20 @@ class OsuEnv(Env):
         
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
-        self.raw_img_queue = raw_img_queue
+        self.raw_img_queue = raw_img_queue 
+        self.temp_img_queue = deque(maxlen=10)
+        for i in range(self.temp_img_queue.maxlen):
+            zero_img = {'img': np.zeros(self.screen_shape, dtype=np.float32), 'time': time.time()}
+            self.temp_img_queue.append(zero_img)
 
         self.empty_frame = np.zeros(self.state_shape, dtype=np.float32)
         self.img_prev = np.zeros(self.screen_shape, dtype=np.float32)
-        self.is_capture = mp.Event()
         self.display = True
         self.game_end = True
         self.game_over = False # True when game is over, else False
         self.stop_mouse = True
-        self.in_game = False
         self.is_breaktime = False
-        self.sd = {'completion': float('-inf'), 'hp': 0}
+        self.sd = {'completion': float('-inf'), 'hp': 0, 'is_breaktime': 0, 'status': 'MainMenu'}
 
         osu_window = gw.getWindowsWithTitle('osu!')
         if test_mode:
@@ -61,41 +63,43 @@ class OsuEnv(Env):
             raise Exception("StreamCompanion window is not found")
 
         self.hits_prev = (0, 0, 0, 0)
-        self.np_playing = ''
         self.song_completion_prev = float('-inf')
         p1 = threading.Thread(target=self._detect_game_state, daemon=True)
         p1.start()
 
-    def step(self, action_: np.ndarray):
-        if action_.ndim != 1:
-            action_ = action_.flatten()
+    def step(self, action: np.ndarray):
+        # if action_.ndim != 1:
+        #     action_ = action_.flatten()
 
-        # add an action queue to delay the action
-        self.action_queue.append(action_)
+        # # add an action queue to delay the action
+        # self.action_queue.append(action_)
 
-        if len(self.action_queue) == 2:
-            action = self.action_queue.popleft()
-            # field = (310, 70, 1610, 1045)
-            # (230, 40, 1310, 850)
-            field = (230, 40, 1080, 810)
-            
-            x = field[0] + ((action[0] + 1) * (field[2] / 2))
-            y = field[1] + ((action[1] + 1) * (field[3] / 2))
-            x, y = round(x), round(y)
+        # if len(self.action_queue) == 2:
+            # action = self.action_queue.popleft()
 
-            pyd.moveTo(x, y, _pause=False)
-            # print('move mouse to', pyd.position())
+        if action.ndim != 1:
+            action = action.flatten()
 
-        self.state = self._process_frame() # now state
-        self.state = self.state.reshape(1, 60, 80) # reshape to (1, 60, 80)
+        # field = (310, 70, 1610, 1045)
+        # (230, 40, 1310, 850)
+        field = (230, 40, 1080, 810)
+        
+        x = field[0] + ((action[0] + 1) * (field[2] / 2))
+        y = field[1] + ((action[1] + 1) * (field[3] / 2))
+        x, y = round(x), round(y)
+
+        pyd.moveTo(x, y, _pause=False)
+        # print('move mouse to', pyd.position())
+
+        self.state = self._process_frame() # state.shape = (2, 60, 80)
         reward = self._calc_score()
         reward = max(-1, min(1, reward))
         
-        if self.game_end and self.in_game:
-            done = True # TODO: add game end detection
-        else:
-            done = False
-        
+        # if self.game_end and self.in_game:
+        #     done = True # TODO: add game end detection
+        # else:
+        #     done = False
+        done = None
         info = {}
 
         return self.state, reward, done, info
@@ -106,7 +110,6 @@ class OsuEnv(Env):
 
         self.hits_prev = (0, 0, 0, 0)
         self.song_completion_prev = float('-inf')
-        self.is_capture.clear()
         if not self.raw_img_queue.empty():
             self.raw_img_queue.get()
         
@@ -124,15 +127,35 @@ class OsuEnv(Env):
                 img_np = np.array(img)  # Convert to numpy array for faster processing
                 if self.raw_img_queue.full():
                     self.raw_img_queue.get()
-                self.raw_img_queue.put(img_np)
+                self.raw_img_queue.put({'img': img_np, 'time': time.time()})
     
     def _process_frame(self):
         if not self.raw_img_queue.empty():
-            img = self.raw_img_queue.get()
-            img = cv2.resize(img, (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img = np.array(img)
+            # TODO add frame stacking
+            _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.time()}
+            _img['img'] = cv2.resize(_img['img'], (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
+            _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
+            self.temp_img_queue.append(_img)
+
+            # get the last frame img1 and reshape to (1, 60, 80)
+            img1 = self.temp_img_queue[-1]['img']
+            img1 = np.reshape(img1, (1, self.screen_shape[0], self.screen_shape[1]))
+
+            # find the closest frame to the target time
+            target_time = self.temp_img_queue[-1]['time'] - 0.1
+            closest_index = min(range(len(self.temp_img_queue)), key=lambda i: abs(self.temp_img_queue[i]['time'] - target_time))
+            
+            # get the target frame img2 and reshape to (1, 60, 80)
+            img2 = self.temp_img_queue[closest_index]['img']
+            img2 = np.reshape(img2, (1, self.screen_shape[0], self.screen_shape[1]))
+
+            # combine img1 and img2 to get the final state
+            img = np.concatenate((img1, img2), axis=0)
+
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # img = np.array(img)
             self.img_prev = img
+
             return img
         else:
             print('use previous frame')
@@ -176,7 +199,7 @@ class OsuEnv(Env):
 
         reward = 0
         if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0 and not self.game_end:
-            reward += score_delta[0] * 1 + score_delta[1] * 1 + score_delta[2] * 0.5 + score_delta[3] * (-0.5)
+            reward += score_delta[0] * 1 + score_delta[1] * 1 + score_delta[2] * 0.5 + score_delta[3] * (-1)
 
         elif score_delta[-1] > 0:
             if score_delta[-1] == 10:
@@ -193,76 +216,73 @@ class OsuEnv(Env):
         stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
         T = 0
         while True:
-            with open(os.path.join(stream_companion_path, 'np_playing_DL.txt'), 'r') as f:
-                self.np_playing = f.read()
-                self.in_game = True if len(self.np_playing) > 3 else False
-            
-            if self.in_game: # is playing a song?
-                with open(os.path.join(stream_companion_path, 'song_completion.txt'), 'r') as f:
-                    file = f.read()
-                    if len(file) <= 1:
-                        time.sleep(0.2)
-                        continue
-                    else:
-                        s = [float(i) for i in file.split()]
-                        self.sd = {'completion': s[0], 'hp': s[1], 'is_breaktime': s[2]}
+            with open(os.path.join(stream_companion_path, 'song_completion.txt'), 'r') as f:
+                file = f.read()
+                if len(file) < 3:
+                    time.sleep(0.05)
+                    continue
+                else:
+                    s = [i for i in file.split()]
+                    self.sd = {'completion': float(s[0]), 'hp': float(s[1]), 'is_breaktime': float(s[2]), 'status': s[3]}
+
+            if self.sd['status'] == 'Playing': # is playing a song?
                 
                 if self.sd['is_breaktime']:
                     self.is_breaktime = True
                 else:
                     self.is_breaktime = False
 
-                if self.sd['completion'] < self.song_completion_prev and self.in_game:
+                if self.sd['completion'] < self.song_completion_prev:
                     # reset time
                     self.song_completion_prev = float('-inf')
-                                
-                elif self.sd['completion'] >= 99.99 and self.in_game:
-                    # Completed
-                    self.game_end = True
-                    self.game_over = True
+
+                elif self.sd['completion'] == self.song_completion_prev:
+                    # Pausing and failed
+                    self.game_end = False
                     self.stop_mouse = True
-                    self.is_capture.clear()
-                    self.hits_prev = (0, 0, 0, 0)
-                    self.song_completion_prev = float('-inf')
                     T += 1
                     if T % 30 == 0:
-                        print('Song Completed')
+                        print('Pausing')
 
-                elif self.sd['completion'] > self.song_completion_prev and self.in_game:
+                elif self.sd['completion'] > self.song_completion_prev or self.sd['status'] == 'Playing':
                     # Gaming
                     self.game_end = False
                     self.stop_mouse = False
                     self.song_completion_prev = self.sd['completion']
-                    if self.sd['completion'] > -0.1:
-                        self.is_capture.set()
 
                     T += 1
                     if T % 30 == 0:
                         print('Smashing keys')
 
-                elif self.sd['completion'] == self.song_completion_prev and self.in_game:
-                    # Pausing and failed
-                    self.game_end = False
-                    self.stop_mouse = True
-                    self.is_capture.clear()
-                    T += 1
-                    if T % 30 == 0:
-                        print('Pausing')
-
                 else:
                     T += 1
                     if T % 30 == 0:
                         print('other conditions')
-            
+
+            elif self.sd['status'] == 'ResultsScreen' and self.sd['completion'] >= 100:
+                # Completed
+                self.game_end = True
+                self.game_over = True
+                self.stop_mouse = True
+                self.hits_prev = (0, 0, 0, 0)
+                self.song_completion_prev = float('-inf')
+                T += 1
+                if T % 30 == 0:
+                    print('Song Completed')
+
             else:
                 self.game_end = True
                 self.game_over = False
                 self.stop_mouse = True
                 T += 1
                 if T % 30 == 0:
-                    print("Choosing a beatmap...")
+                    if self.sd['status'] == 'SongSelect':
+                        print("Choosing a beatmap...")
+
+                    elif self.sd['status'] == 'MainMenu':
+                        print("In main menu")
             
-            time.sleep(1/15) # TODO Harder map need less time to pausing
+            time.sleep(0.05) # TODO Harder map need less time to pausing
 
 if __name__ == '__main__':
     raw_img_queue = mp.Queue(maxsize=3)

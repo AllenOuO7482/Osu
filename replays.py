@@ -13,7 +13,44 @@ import pydirectinput as pyd
 
 from env import OsuEnv
 
-def record_game_state():
+def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
+    raw_img_queue = mp.Queue(maxsize=3)
+    env = OsuEnv(raw_img_queue)
+    num_processes = 3
+    processes = []
+    for _ in range(num_processes):
+        p = mp.Process(target=env._get_screen, daemon=True)
+        p.start()
+        processes.append(p)
+
+    s = env.reset() # (2, 60, 80)
+    print('initialization done')
+    replay_count = 4261
+    while replay_count < 5000:
+        while not env.sd['status'] == 'Playing' or env.stop_mouse or env.is_breaktime:
+            # waiting for game start, or pausing, or break time
+            time.sleep(0.1)
+
+        # save last screen array, action, reward, now screen array
+        x, y = pyd.position()
+        a = np.array([0, 0], dtype=np.float32)
+        field = (230, 40, 1080, 810)
+
+        a[0] = (x - field[0]) / (field[2] / 2) - 1
+        a[1] = (y - field[1]) / (field[3] / 2) - 1
+        r = env._calc_score()
+
+        if (r == 0 and random.random() < 0.1) or r != 0:
+            s1 = env._process_frame() # (2, 60, 80)
+
+            batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
+            np.savez_compressed(os.path.join(save_folder, f'{replay_count+1}.npz') , batch)
+            replay_count += 1
+            s = s1
+
+        time.sleep(1/30)
+
+def record_2_frames(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
     num_processes = 3
@@ -47,8 +84,8 @@ def record_game_state():
             s1 = np.concatenate((s1, new_s), axis=0) # (4, 60, 80)
 
             batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
-            np.savez_compressed(Path(__file__).parent / 'game_state' / f'game_state_{replay_count+1}.npz', batch)
-            replay_count += 1
+            np.savez_compressed(os.path.join(save_folder, f'{replay_count+1}.npz') , batch)
+            replay_count += 1   
             s = s1
 
         time.sleep(1/30)

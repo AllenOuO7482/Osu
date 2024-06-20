@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
-import numpy as np
-import heapq
 
 def init_weights_he(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -35,13 +33,13 @@ class Actor(nn.Module):
         self.h1 = nn.Linear(to_linear, 512)
         self.fc = nn.Linear(512, a_dim)
 
-        self.h1.weight.data.normal_(0.02, 0.1)
-        self.fc.weight.data.normal_(0.02, 0.1)
+        self.h1.weight.data.normal_(0.01, 0.1)
+        self.fc.weight.data.normal_(0.01, 0.1)
 
         self.apply(init_weights_he)
         self.fc.apply(init_weight_xavier)
 
-        self.scale = 0.77  # 动作缩放因子
+        self.scale = 1.0  # 动作缩放因子
         self.output_history = deque(maxlen=1000)
         self.ema_mean = None
         self.ema_min = None
@@ -86,7 +84,7 @@ class Actor(nn.Module):
         
         if len(self.output_history) == 1:
             self.ema_mean = output_np.mean(axis=0)
-            self.ema_min = output_np.min(axis=0)
+            self.ema_min = output_np.min(axis=0) 
             self.ema_max = output_np.max(axis=0)
         else:
             self.ema_mean = self.alpha * output_np.mean(axis=0) + (1 - self.alpha) * self.ema_mean
