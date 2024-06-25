@@ -25,7 +25,7 @@ class OsuEnv(Env):
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state_shape = (2, 60, 80)
+        self.state_shape = (4, 60, 80)
         self.state = np.zeros(self.state_shape, dtype=np.float32)
         self.action_queue = deque(maxlen=2)
         # self.action_delay = 0.02 # delay between actions in seconds
@@ -34,7 +34,7 @@ class OsuEnv(Env):
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
         self.raw_img_queue = raw_img_queue 
-        self.temp_img_queue = deque(maxlen=10)
+        self.temp_img_queue = deque(maxlen=25)
         for i in range(self.temp_img_queue.maxlen):
             zero_img = {'img': np.zeros(self.screen_shape, dtype=np.float32), 'time': time.time()}
             self.temp_img_queue.append(zero_img)
@@ -91,7 +91,7 @@ class OsuEnv(Env):
         pyd.moveTo(x, y, _pause=False)
         # print('move mouse to', pyd.position())
 
-        self.state = self._process_frame() # state.shape = (2, 60, 80)
+        self.state = self._process_frame() # state.shape = 
         reward = self._calc_score()
         reward = max(-1, min(1, reward))
         
@@ -137,26 +137,18 @@ class OsuEnv(Env):
             _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
             self.temp_img_queue.append(_img)
 
-            # get the last frame img1 and reshape to (1, 60, 80)
-            img1 = self.temp_img_queue[-1]['img']
-            img1 = np.reshape(img1, (1, self.screen_shape[0], self.screen_shape[1]))
-
+            img_lst = []
             # find the closest frame to the target time
-            target_time = self.temp_img_queue[-1]['time'] - 0.1
-            closest_index = min(range(len(self.temp_img_queue)), key=lambda i: abs(self.temp_img_queue[i]['time'] - target_time))
+            interval = 0.1
+            target_time = self.temp_img_queue[-1]['time']
+            for i in range(4):
+                idx = min(range(len(self.temp_img_queue)), key=lambda j: abs(self.temp_img_queue[j]['time'] - (target_time - interval * i)))
+                img_lst.append(self.temp_img_queue[idx]['img'])
             
-            # get the target frame img2 and reshape to (1, 60, 80)
-            img2 = self.temp_img_queue[closest_index]['img']
-            img2 = np.reshape(img2, (1, self.screen_shape[0], self.screen_shape[1]))
-
-            # combine img1 and img2 to get the final state
-            img = np.concatenate((img1, img2), axis=0)
-
-            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # img = np.array(img)
+            img = np.array(img_lst, dtype=np.float32)
             self.img_prev = img
-
             return img
+        
         else:
             print('use previous frame')
             return self.img_prev
@@ -226,7 +218,8 @@ class OsuEnv(Env):
                     self.sd = {'completion': float(s[0]), 'hp': float(s[1]), 'is_breaktime': float(s[2]), 'status': s[3]}
 
             if self.sd['status'] == 'Playing': # is playing a song?
-                
+                self.game_over = False
+
                 if self.sd['is_breaktime']:
                     self.is_breaktime = True
                 else:
@@ -259,7 +252,7 @@ class OsuEnv(Env):
                     if T % 30 == 0:
                         print('other conditions')
 
-            elif self.sd['status'] == 'ResultsScreen' and self.sd['completion'] >= 100:
+            elif self.sd['status'] == 'ResultsScreen':
                 # Completed
                 self.game_end = True
                 self.game_over = True

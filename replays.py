@@ -23,9 +23,9 @@ def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
         p.start()
         processes.append(p)
 
-    s = env.reset() # (2, 60, 80)
+    s = env.reset() # 
     print('initialization done')
-    replay_count = 4261
+    replay_count = 2001
     while replay_count < 5000:
         while not env.sd['status'] == 'Playing' or env.stop_mouse or env.is_breaktime:
             # waiting for game start, or pausing, or break time
@@ -41,7 +41,7 @@ def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
         r = env._calc_score()
 
         if (r == 0 and random.random() < 0.1) or r != 0:
-            s1 = env._process_frame() # (2, 60, 80)
+            s1 = env._process_frame() # 
 
             batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
             np.savez_compressed(os.path.join(save_folder, f'{replay_count+1}.npz') , batch)
