@@ -60,16 +60,17 @@ def get_batch(replays: deque, batch_size, device):
 
     batch = random.sample(replays, batch_size)
     
-    s = torch.tensor(np.array([s for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
-    a = torch.tensor(np.array([a for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
-    r = torch.tensor(np.array([r for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
+    s  = torch.tensor(np.array([s  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
+    a  = torch.tensor(np.array([a  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
+    r  = torch.tensor(np.array([r  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     s1 = torch.tensor(np.array([s1 for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
 
     return s, a, r, s1
 
 def choose_song():
+    pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
     time.sleep(1), pyd.click(x=494, y=800), print('choose a random song')
-    time.sleep(6), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
+    time.sleep(4), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
     time.sleep(2), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
 
 def write_log_file(source_file, target_file):
@@ -83,8 +84,10 @@ def write_log_file(source_file, target_file):
             tgt.write(content + '\n')
         
         print(f"Successfully appended {source_file} to {target_file}")
+
     except FileNotFoundError as e:
         print(f"File not found: {e}")
+
     except IOError as e:
         print(f"I/O error: {e}")
 
@@ -101,6 +104,9 @@ def target_update(model_main, model_target, tau):
         target_param.data.copy_(tau * main_param.data + (1 - tau) * target_param.data)
 
 def params_update(time_steps):
+    """
+    ### update the parameters of the agent
+    """
     training_start_time = time.time()
     for j in range(time_steps):
         # when buffer is full, start training
@@ -155,9 +161,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
     source_folder = 'C:/Program Files (x86)/StreamCompanion/Files'
     target_file = 'C:/Users/sword/.vscode/vtb/Osu/score_log.txt'
 
-    # if epoch == 0:
-    #     print('start pre-training, time_steps: 100')
-    #     params_update(100)
+    with open(target_file, 'a', encoding='utf-8') as tgt:
+        tgt.write('\n===========\n')
+
+    if epoch == 0:
+        print('start pre-training, time_steps: 50')
+        params_update(50)
 
     for i in range(epoch, episodes):
         s = env.reset()
@@ -177,7 +186,9 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             time.sleep(0.05)
             if env.sd['status'] == 'ResultsScreen' and auto_choose_song.value:
                 print('auto choose a song')
-                time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
+                if not len(replays) >= buffer * 0.3: 
+                    time.sleep(5)
+
                 choose_song()
 
         while not env.game_over:
@@ -189,12 +200,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
 
             # collect experience 
             a = A_main(s, scale).detach()
-            a_ = a.squeeze(0).cpu().numpy()
-            if a_[0] <= -0.99 or a_[0] >= 0.99: 
-                scale[0] *= 0.9998
-            elif a_[1] <= -0.99 or a_[1] >= 0.99:
-                scale[1] *= 0.9998
-            hyperparam_dict['scale'] = scale
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -203,21 +208,46 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             s1, r, done, _ = env.step(a0)
             # env.render()
 
+            a_ = a.squeeze(0).cpu().numpy()
+            if i >= 10 and len(replays) >= buffer * 0.3 and start_training:
+                if a_[0] <= -0.99 or a_[0] >= 0.99 and scale[0] >= 0.8: 
+                    scale[0] *= 0.9999
+                    if r < 0: 
+                        r -= 1
+
+                elif a_[1] <= -0.99 or a_[1] >= 0.99 and scale[1] >= 0.8:
+                    scale[1] *= 0.9999
+                    if r < 0: 
+                        r -= 1
+                
+                if scale[0] < 0.8:
+                    scale[0] = 0.8
+
+                if scale[1] < 0.8:
+                    scale[1] = 0.8
+
+            hyperparam_dict['scale'] = scale
+
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            if ((r == 0 and random.random() <= 0.05) or r != 0) and r < 10:
+            if ((r == 0 and random.random() <= 0.05) or (r < 0 and random.random() <= 0.5) or r > 0) and r < 10:
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
 
                 if sigma > 0.15:
                     sigma = 0.15 # maximum noise standard deviation
+
                 elif r < 0:
                     sigma *= 1.001
+
                 elif r == 1 and sigma >= 0.03:
                     sigma *= 0.998
+
                 elif sigma < 0.03:
                     if r < 0:
                         sigma *= 1.0001
+
                     elif r == 1:
                         sigma *= 0.99995
+
                     elif sigma < 0.01:
                         sigma = 0.01 # minimum noise standard deviation
 
@@ -229,9 +259,12 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             s = s1
             elapsed_time = time.time() - now
             if elapsed_time >= 1:
-                print('FPS: %.2f' % (frame_count / elapsed_time))
+                fps_value = frame_count / elapsed_time
+                print('FPS: %.2f' % (fps_value))
+
                 now = time.time()
                 frame_count = 0
+
             else:
                 frame_count += 1
 
@@ -240,8 +273,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
         rewards.append(episode_reward)
 
         if len(replays) >= buffer * 0.3 and start_training:
-            training_start_time = time.time()
-
             time_steps = (len(replays) - replays_len_prev)
             replays_len_prev = len(replays)
 
@@ -263,9 +294,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             print('saved model checkpoint_%i.pth' % i)
 
         clear_output(wait=True)
-
-        # while env.game_over:
-            # time.sleep(0.1)
 
     torch.save(A_main.state_dict(), f'{model_folder}/actor_final.pth')
 
