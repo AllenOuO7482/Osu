@@ -100,6 +100,40 @@ def target_update(model_main, model_target, tau):
     for target_param, main_param in zip(model_target.parameters(), model_main.parameters()):
         target_param.data.copy_(tau * main_param.data + (1 - tau) * target_param.data)
 
+def params_update(time_steps):
+    training_start_time = time.time()
+    for j in range(time_steps):
+        # when buffer is full, start training
+        # sample a batch of data from replay buffer
+        s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
+        a_bat = A_main(s_bat, scale)
+        q_bat = Q_main(s_bat, a_bat)
+        # calculate loss and update Actor
+        loss_a = -torch.mean(q_bat)
+        opt_a.zero_grad()
+        loss_a.backward()
+        opt_a.step()
+        losses_a.append(loss_a.item())
+        # update Q-function
+        y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
+        with torch.no_grad():
+            a1_bat = A_target(s1_bat, scale)
+            q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
+            y = r_bat + gamma * q1_bat
+        # calculate loss and update Critic
+        loss_c = loss_fn(y.detach(), y_hat)
+        opt_c.zero_grad()
+        loss_c.backward()
+        opt_c.step()
+        losses_c.append(loss_c.item())
+        # update target networks
+        target_update(A_main, A_target, tau)
+        target_update(Q_main, Q_target, tau)
+
+        if j % 25 == 0 and j > 0:
+            print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
+
+    print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
 def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int, 
                 gamma: float, tau: float, sigma: float, scale: float):
@@ -121,6 +155,10 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
     source_folder = 'C:/Program Files (x86)/StreamCompanion/Files'
     target_file = 'C:/Users/sword/.vscode/vtb/Osu/score_log.txt'
 
+    # if epoch == 0:
+    #     print('start pre-training, time_steps: 100')
+    #     params_update(100)
+
     for i in range(epoch, episodes):
         s = env.reset()
         replays_len_prev = len(replays)
@@ -141,10 +179,6 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
                 print('auto choose a song')
                 time.sleep(7), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
                 choose_song()
-            
-            # elif env.sd['status'] == 'SongSelect' and auto_choose_song.value:
-            #     print('auto choose a song')
-            #     choose_song()
 
         while not env.game_over:
             start_training = True
@@ -156,9 +190,9 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             # collect experience 
             a = A_main(s, scale).detach()
             a_ = a.squeeze(0).cpu().numpy()
-            if a_[0] <= -0.99 or a_[1] <= -0.99 or a_[0] >= 0.99 or a_[1] >= 0.99:
-                scale *= 0.9999
-                hyperparam_dict['scale'] = scale
+            # if a_[0] <= -0.99 or a_[1] <= -0.99 or a_[0] >= 0.99 or a_[1] >= 0.99:
+            #     scale *= 0.9999
+            #     hyperparam_dict['scale'] = scale
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -171,7 +205,7 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             if ((r == 0 and random.random() <= 0.05) or r != 0) and r < 10:
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
 
-                if sigma >= 0.15:
+                if sigma > 0.15:
                     sigma = 0.15 # maximum noise standard deviation
                 elif r < 0:
                     sigma *= 1.0005
@@ -203,48 +237,16 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
         write_log_file(os.path.join(source_folder, 'output_log.txt'), target_file)
         rewards.append(episode_reward)
 
-        if len(replays) >= buffer * 0.2 and start_training:
+        if len(replays) >= buffer * 0.3 and start_training:
             training_start_time = time.time()
 
             time_steps = (len(replays) - replays_len_prev)
             replays_len_prev = len(replays)
 
             print('Start training, time_steps:', time_steps, 'epoches:', i)
+            params_update(time_steps)
 
-            for j in range(time_steps):
-                # when buffer is full, start training
-                # sample a batch of data from replay buffer
-                s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-                a_bat = A_main(s_bat, scale)
-                q_bat = Q_main(s_bat, a_bat)
-                # calculate loss and update Actor
-                loss_a = -torch.mean(q_bat)
-                opt_a.zero_grad()
-                loss_a.backward()
-                opt_a.step()
-                losses_a.append(loss_a.item())
-                # update Q-function
-                y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
-                with torch.no_grad():
-                    a1_bat = A_target(s1_bat, scale)
-                    q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
-                    y = r_bat + gamma * q1_bat
-                # calculate loss and update Critic
-                loss_c = loss_fn(y.detach(), y_hat)
-                opt_c.zero_grad()
-                loss_c.backward()
-                opt_c.step()
-                losses_c.append(loss_c.item())
-                # update target networks
-                target_update(A_main, A_target, tau)
-                target_update(Q_main, Q_target, tau)
-
-                if j % 25 == 0 and j > 0:
-                    print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
-
-            print('Training time: %.2f seconds' % time.time() - training_start_time)
-
-        if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.2:
+        if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.3:
             checkpoint = {
                 'epochs': i+1,
                 'hyperparameters': hyperparam_dict,
@@ -327,7 +329,7 @@ if __name__ == '__main__':
         # define actor-critic models without a saved model
         epoch = 0
         hyperparam_dict = {
-            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
+            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 128, 
             'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': 1
         }
         # define actor-critic models with default hyperparameters
