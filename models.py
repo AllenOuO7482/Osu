@@ -43,9 +43,9 @@ class Actor(nn.Module):
         if x.ndim == 3:
             x = x.unsqueeze(0)
         x = enhance_features(x)
-        for i in range(x.shape[0]):
-            # 1 0.85 0.7 0.55
-            x[i].mul_(1.0 - 0.15 * i)
+        # for i in range(x.shape[0]):
+        #     # 1 0.85 0.7 0.55
+        #     x[i].mul_(1.0 - 0.15 * i)
         x = x / 255.0
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -68,9 +68,9 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Critic, self).__init__()
-        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(s_dim[0], 32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2])
         self.h1s = nn.Linear(to_linear, 64)
         self.h1a = nn.Linear(a_dim, 64)
@@ -89,8 +89,8 @@ class Critic(nn.Module):
         if s.ndim == 3:
             s = s.unsqueeze(0)
         s = enhance_features(s)
-        for i in range(s.shape[0]):
-            s[i].mul_(1.0 - 0.15 * i)
+        # for i in range(s.shape[0]):
+        #     s[i].mul_(1.0 - 0.15 * i)
         xs = s / 255.0
         xs = F.relu(self.conv1(xs))
         xs = F.relu(self.conv2(xs))

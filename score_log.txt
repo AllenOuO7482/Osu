@@ -272,3 +272,6 @@ Yata Yusuke - Okaeri. (TV Size) [Normal] CS:3 AR:5 OD:4 HP:3 score: 9180, acc: 7
 AKINO from bless4 - Just Moving On Now [Easy] CS:3 AR:3 OD:3 HP:2 score: 7710, acc: 11.21 // 300, 100, 50, miss: 5 11 22 72
 TRUE - ReCoda (TV Size) [KennethBBG's Normal] CS:3.5 AR:5 OD:4 HP:4 score: 7690, acc: 10.00 // 300, 100, 50, miss: 10 11 8 121
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 630, acc: 6.94 // 300, 100, 50, miss: 0 0 5 7
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 12380, acc: 16.67 // 300, 100, 50, miss: 1 0 6 5
+
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 5170, acc: 15.28 // 300, 100, 50, miss: 1 0 5 6

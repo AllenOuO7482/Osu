@@ -68,9 +68,9 @@ def get_batch(replays: deque, batch_size, device):
     return s, a, r, s1
 
 def choose_song():
-    time.sleep(1), pyd.click(x=494, y=808), print('choose a random song')
+    time.sleep(1), pyd.click(x=494, y=800), print('choose a random song')
     time.sleep(6), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
-    time.sleep(4), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
+    time.sleep(2), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
 
 def write_log_file(source_file, target_file):
     try:
@@ -239,10 +239,10 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
                 target_update(A_main, A_target, tau)
                 target_update(Q_main, Q_target, tau)
 
-                if j % 25 == 0:
-                    print('Step:', j, 'Loss_a:', loss_a.item(), 'Loss_c:', loss_c.item())
+                if j % 25 == 0 and j > 0:
+                    print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
 
-            print('Training time:', time.time() - training_start_time)
+            print('Training time: %.2f seconds' % time.time() - training_start_time)
 
         if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.2:
             checkpoint = {
@@ -328,7 +328,7 @@ if __name__ == '__main__':
         epoch = 0
         hyperparam_dict = {
             'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
-            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': 0.25
+            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': 1
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
