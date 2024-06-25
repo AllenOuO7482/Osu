@@ -301,3 +301,16 @@ toby fox - MEGALOVANIA [Easy] CS:3 AR:3 OD:2 HP:2 score: 1270, acc: 1.57 // 300,
 Tsukuyomi - Necropolis [Normal] CS:3.5 AR:6 OD:4 HP:4 score: 6550, acc: 4.75 // 300, 100, 50, miss: 9 16 11 304
 Lindsey Stirling - Senbonzakura [AsaNe's Easy] CS:3 AR:3 OD:2 HP:2 score: 15360, acc: 13.21 // 300, 100, 50, miss: 10 16 34 99
 KUMOKIRI - Shippuujinrai [Nytro's Normal] CS:3.6 AR:5.2 OD:4.2 HP:3 score: 8890, acc: 10.24 // 300, 100, 50, miss: 12 17 15 153
+KUMOKIRI - Shippuujinrai [Nytro's Normal] CS:3.6 AR:5.2 OD:4.2 HP:3 score: 8930, acc: 11.84 // 300, 100, 50, miss: 14 24 8 151
+Raphlesia & BilliumMoto - My Love [Easy] CS:2.5 AR:3.5 OD:2.6 HP:1.8 score: 20630, acc: 18.68 // 300, 100, 50, miss: 37 33 46 182
+THE ORAL CIGARETTES - Youshi Tanrei na Uso [Yuuma's Normal] CS:3.5 AR:5.5 OD:4 HP:3 score: 6520, acc: 10.07 // 300, 100, 50, miss: 12 18 2 150
+
+THE ORAL CIGARETTES - Kyouran Hey Kids!! [Rizen's Easy] CS:3 AR:3 OD:2 HP:2 score: 4970, acc: 13.59 // 300, 100, 50, miss: 9 9 12 73
+toby fox vs. Ferdk - Battle Against a True Hero [CraEZy's Easy] CS:2.5 AR:3 OD:3 HP:2 score: 5570, acc: 13.40 // 300, 100, 50, miss: 7 7 26 62
+Yura Hatsuki - Shadows ~Kage Iro Yousei Ehon~ [Easy] CS:3 AR:3 OD:2 HP:2 score: 17510, acc: 15.15 // 300, 100, 50, miss: 32 37 33 227
+Raphlesia & BilliumMoto - My Love [Easy] CS:2.5 AR:3.5 OD:2.6 HP:1.8 score: 18010, acc: 16.61 // 300, 100, 50, miss: 33 36 27 202
+Roselia & Afterglow - MIIRO vs. Ai no Scenario [Beginner] CS:2.5 AR:3 OD:1.5 HP:2 score: 3310, acc: 12.56 // 300, 100, 50, miss: 4 6 16 43
+KARUT - Connected Sky [Normal] CS:3.4 AR:4.5 OD:4.2 HP:3.2 score: 6930, acc: 10.91 // 300, 100, 50, miss: 6 18 17 95
+DJ Mikesh - Be Free (Nightcore Mix) [Standard] CS:3 AR:5 OD:3 HP:3 score: 13880, acc: 17.34 // 300, 100, 50, miss: 25 30 22 146
+Roselia & Afterglow - MIIRO vs. Ai no Scenario [Easy] CS:2.7 AR:4 OD:2 HP:3 score: 5950, acc: 13.47 // 300, 100, 50, miss: 11 11 9 89
+Hana - Eden's Song [go off gorou's Easy] CS:2.5 AR:3 OD:2 HP:2 score: 8730, acc: 15.99 // 300, 100, 50, miss: 16 12 21 98

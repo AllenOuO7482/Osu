@@ -55,7 +55,10 @@ class Actor(nn.Module):
         else:
             raise ValueError('Invalid input shape in actor')
         x = F.relu(self.h1(x))
-        x = torch.tanh((self.fc(x) * scale))
+        x = self.fc(x)
+        x[0, 0].mul_(scale[0])
+        x[0, 1].mul_(scale[1])
+        x = torch.tanh(x)
         return x
 
     def _get_conv_output(self, channels, height, width):

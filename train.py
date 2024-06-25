@@ -136,7 +136,7 @@ def params_update(time_steps):
     print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
 def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int, 
-                gamma: float, tau: float, sigma: float, scale: float):
+                gamma: float, tau: float, sigma: float, scale: list):
     """
     ### train the agent using DDPG algorithm
 
@@ -190,9 +190,11 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             # collect experience 
             a = A_main(s, scale).detach()
             a_ = a.squeeze(0).cpu().numpy()
-            # if a_[0] <= -0.99 or a_[1] <= -0.99 or a_[0] >= 0.99 or a_[1] >= 0.99:
-            #     scale *= 0.9999
-            #     hyperparam_dict['scale'] = scale
+            if a_[0] <= -0.99 or a_[0] >= 0.99: 
+                scale[0] *= 0.9998
+            elif a_[1] <= -0.99 or a_[1] >= 0.99:
+                scale[1] *= 0.9998
+            hyperparam_dict['scale'] = scale
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -208,9 +210,9 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
                 if sigma > 0.15:
                     sigma = 0.15 # maximum noise standard deviation
                 elif r < 0:
-                    sigma *= 1.0005
+                    sigma *= 1.001
                 elif r == 1 and sigma >= 0.03:
-                    sigma *= 0.997
+                    sigma *= 0.998
                 elif sigma < 0.03:
                     if r < 0:
                         sigma *= 1.0001
@@ -220,7 +222,7 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
                         sigma = 0.01 # minimum noise standard deviation
 
                 hyperparam_dict['sigma'] = sigma
-                print('reward:', r, 'sigma: %.4f' % sigma, 'scale %.4f' % scale)
+                print('reward:', r, 'sigma: %.4f' % sigma, 'scale %.4f' % scale[0], '%.4f' % scale[1])
                 
             episode_reward += r
             
@@ -330,7 +332,7 @@ if __name__ == '__main__':
         epoch = 0
         hyperparam_dict = {
             'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 128, 
-            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': 1
+            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': [1, 1]
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
