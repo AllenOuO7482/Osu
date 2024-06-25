@@ -25,9 +25,9 @@ def enhance_features(x: torch.Tensor):
 class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
-        self.conv1 = nn.Conv2d(s_dim[0], 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2]) # flattens the input
         self.h1 = nn.Linear(to_linear, 512)
         self.fc = nn.Linear(512, a_dim)
@@ -38,7 +38,7 @@ class Actor(nn.Module):
     def forward(self, x: torch.Tensor, scale: list):
         if x.ndim == 3:
             x = x.unsqueeze(0)
-        x = enhance_features(x)
+        # x = enhance_features(x)
         # for i in range(x.shape[0]):
         #     # 1 0.85 0.7 0.55
         #     x[i].mul_(1.0 - 0.15 * i)
@@ -52,9 +52,9 @@ class Actor(nn.Module):
             raise ValueError('Invalid input shape in actor')
         x = F.relu(self.h1(x))
         x = self.fc(x)
-        for i in range(x.shape[0]):
-            x[i, 0].mul_(scale[0])
-            x[i, 1].mul_(scale[1])
+        if x.shape[0] == 1:
+            x[0, 0].mul_(scale[0])
+            x[0, 1].mul_(scale[1])
         x = torch.tanh(x)
         return x
 
@@ -68,9 +68,10 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Critic, self).__init__()
-        self.conv1 = nn.Conv2d(s_dim[0], 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2])
         self.h1s = nn.Linear(to_linear, 32)
         self.h1a = nn.Linear(a_dim, 32)
@@ -82,7 +83,7 @@ class Critic(nn.Module):
     def forward(self, s: torch.Tensor, a: torch.Tensor):
         if s.ndim == 3:
             s = s.unsqueeze(0)
-        s = enhance_features(s)
+        # s = enhance_features(s)
         xs = s / 255.0
         xs = F.relu(self.conv1(xs))
         xs = F.relu(self.conv2(xs))
@@ -116,5 +117,5 @@ if __name__ == '__main__':
     for i in range(1000):
         # 示例输入
         state = torch.randint(0, 255, s_dim, dtype=torch.float32)
-        action = actor(state)
+        action = actor(state, [1.0, 1.0])
         print(action)

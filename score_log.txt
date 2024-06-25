@@ -352,3 +352,15 @@ The Flashbulb - You Take the World's Weight Away [Easy] CS:3 AR:3.3 OD:3 HP:3 sc
 
 ===========
 Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 4390, acc: 6.81 // 300, 100, 50, miss: 6 10 18 147
+
+===========
+Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 2160, acc: 3.22 // 300, 100, 50, miss: 3 5 7 166
+
+===========
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 8610, acc: 15.28 // 300, 100, 50, miss: 1 0 5 6
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 950, acc: 5.07 // 300, 100, 50, miss: 0 2 3 18
+ALTIMA - Burst The Gravity (TV Size) [Xinely's Easy] CS:3 AR:3 OD:2 HP:2 score: 1130, acc: 2.04 // 300, 100, 50, miss: 1 1 4 92
+
+===========
+
+===========

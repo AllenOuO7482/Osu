@@ -68,15 +68,6 @@ class OsuEnv(Env):
         p1.start()
 
     def step(self, action: np.ndarray):
-        # if action_.ndim != 1:
-        #     action_ = action_.flatten()
-
-        # # add an action queue to delay the action
-        # self.action_queue.append(action_)
-
-        # if len(self.action_queue) == 2:
-            # action = self.action_queue.popleft()
-
         if action.ndim != 1:
             action = action.flatten()
 
@@ -130,28 +121,26 @@ class OsuEnv(Env):
                 self.raw_img_queue.put({'img': img_np, 'time': time.time()})
     
     def _process_frame(self):
-        if not self.raw_img_queue.empty():
-            # TODO add frame stacking
-            _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.time()}
-            _img['img'] = cv2.resize(_img['img'], (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
-            _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
-            self.temp_img_queue.append(_img)
+        while self.raw_img_queue.empty():
+            time.sleep(0.01)
 
-            img_lst = []
-            # find the closest frame to the target time
-            interval = 0.1
-            target_time = self.temp_img_queue[-1]['time']
-            for i in range(4):
-                idx = min(range(len(self.temp_img_queue)), key=lambda j: abs(self.temp_img_queue[j]['time'] - (target_time - interval * i)))
-                img_lst.append(self.temp_img_queue[idx]['img'])
-            
-            img = np.array(img_lst, dtype=np.float32)
-            self.img_prev = img
-            return img
+        _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.time()}
+        _img['img'] = cv2.resize(_img['img'], (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
+        _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
+        self.temp_img_queue.append(_img)
+
+        img_lst = []
+        # find the closest frame to the target time
+        interval = 0.1
+        target_time = self.temp_img_queue[-1]['time']
+        for i in range(4):
+            idx = min(range(len(self.temp_img_queue)), key=lambda j: abs(self.temp_img_queue[j]['time'] - (target_time - interval * i)))
+            img_lst.append(self.temp_img_queue[idx]['img'])
         
-        else:
-            print('use previous frame')
-            return self.img_prev
+        img = np.array(img_lst, dtype=np.float32)
+        self.img_prev = img
+        return img
+        
 
     def _update_opencv_window(self):
         try:

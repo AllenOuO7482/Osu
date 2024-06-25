@@ -165,8 +165,8 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
         tgt.write('\n===========\n')
 
     if epoch == 0:
-        print('start pre-training, time_steps: 50')
-        params_update(50)
+        print('start pre-training, time_steps: 2000')
+        params_update(2000)
 
     for i in range(epoch, episodes):
         s = env.reset()
@@ -359,7 +359,7 @@ if __name__ == '__main__':
         # define actor-critic models without a saved model
         epoch = 0
         hyperparam_dict = {
-            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 128, 
+            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
             'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': [1, 1]
         }
         # define actor-critic models with default hyperparameters
