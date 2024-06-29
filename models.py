@@ -38,7 +38,7 @@ class Actor(nn.Module):
     def forward(self, x: torch.Tensor, scale: list):
         if x.ndim == 3:
             x = x.unsqueeze(0)
-        # x = enhance_features(x)
+        x = enhance_features(x)
         # for i in range(x.shape[0]):
         #     # 1 0.85 0.7 0.55
         #     x[i].mul_(1.0 - 0.15 * i)
@@ -83,7 +83,7 @@ class Critic(nn.Module):
     def forward(self, s: torch.Tensor, a: torch.Tensor):
         if s.ndim == 3:
             s = s.unsqueeze(0)
-        # s = enhance_features(s)
+        s = enhance_features(s)
         xs = s / 255.0
         xs = F.relu(self.conv1(xs))
         xs = F.relu(self.conv2(xs))

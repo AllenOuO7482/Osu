@@ -200,6 +200,7 @@ def save(replays: deque, enable_save_replay):
         print('queue is empty')
 
 if __name__ == "__main__":
-    # replays = load(buffer=20000)
+    # # replays = load(buffer=20000)
     # print("Loaded replays:", len(replays), type(replays))
     record_game_state()
+

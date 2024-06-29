@@ -68,7 +68,7 @@ def get_batch(replays: deque, batch_size, device):
     return s, a, r, s1
 
 def choose_song():
-    pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
+    time.sleep(1), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
     time.sleep(1), pyd.click(x=494, y=800), print('choose a random song')
     time.sleep(4), pyd.keyDown('enter'), pyd.keyUp('enter'), print('key enter down')
     time.sleep(2), pyd.keyDown('space'), pyd.keyUp('space'), print('key space down')
@@ -141,7 +141,7 @@ def params_update(time_steps):
 
     print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
-def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int, 
+def train_agent(episodes: int, buffer: int, batch_size: int, 
                 gamma: float, tau: float, sigma: float, scale: list):
     """
     ### train the agent using DDPG algorithm
@@ -165,12 +165,11 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
         tgt.write('\n===========\n')
 
     if epoch == 0:
-        print('start pre-training, time_steps: 2000')
-        params_update(2000)
+        print('start pre-training, time_steps: 1000')
+        params_update(1000)
 
     for i in range(epoch, episodes):
         s = env.reset()
-        replays_len_prev = len(replays)
         s = torch.tensor(s, dtype=torch.float32).to(device)
         if not dc_process.is_alive():
             dc_process.start()
@@ -229,29 +228,34 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
             hyperparam_dict['scale'] = scale
 
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            if ((r == 0 and random.random() <= 0.05) or (r < 0 and random.random() <= 0.5) or r > 0) and r < 10:
-                replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
-
-                if sigma > 0.15:
-                    sigma = 0.15 # maximum noise standard deviation
-
-                elif r < 0:
-                    sigma *= 1.001
+            # TODO: remove all zero rewards from replay buffer
+            if r != 0 and r < 10:
+                if r < 0:
+                    sigma *= 1.002
 
                 elif r == 1 and sigma >= 0.03:
-                    sigma *= 0.998
+                    sigma *= 0.995
 
-                elif sigma < 0.03:
+                elif sigma < 0.08:
                     if r < 0:
-                        sigma *= 1.0001
+                        sigma *= 1.001
+
+                    elif r == 0.2:
+                        r = -0.5
+                        sigma *= 1.001
 
                     elif r == 1:
-                        sigma *= 0.99995
+                        sigma *= 0.9998
 
-                    elif sigma < 0.01:
-                        sigma = 0.01 # minimum noise standard deviation
+                if sigma < 0.01:
+                    sigma = 0.01 # minimum noise standard deviation
+
+                elif sigma > 0.15:
+                    sigma = 0.15 # maximum noise standard deviation
 
                 hyperparam_dict['sigma'] = sigma
+                replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
+                time_steps += 1
                 print('reward:', r, 'sigma: %.4f' % sigma, 'scale %.4f' % scale[0], '%.4f' % scale[1])
                 
             episode_reward += r
@@ -273,8 +277,7 @@ def train_agent(episodes: int, time_steps: int, buffer: int, batch_size: int,
         rewards.append(episode_reward)
 
         if len(replays) >= buffer * 0.3 and start_training:
-            time_steps = (len(replays) - replays_len_prev)
-            replays_len_prev = len(replays)
+            time_steps *= 2.5
 
             print('Start training, time_steps:', time_steps, 'epoches:', i)
             params_update(time_steps)
@@ -421,6 +424,6 @@ if __name__ == '__main__':
     print('all initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
  
     # train agent with replays
-    train_agent(episodes, time_steps, buffer, batch_size, gamma, tau, sigma, scale)
+    train_agent(episodes, buffer, batch_size, gamma, tau, sigma, scale)
 
 cv2.destroyAllWindows()

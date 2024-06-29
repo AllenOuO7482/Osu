@@ -180,14 +180,14 @@ class OsuEnv(Env):
 
         reward = 0
         if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0 and not self.game_end:
-            reward += score_delta[0] * 1 + score_delta[1] * 1 + score_delta[2] * 0.5 + score_delta[3] * (-1)
+            reward += score_delta[0] * 2 + score_delta[1] * 0.5 + score_delta[2] * 0.2 + score_delta[3] * (-1)
 
         elif score_delta[-1] > 0:
             if score_delta[-1] == 10:
-                reward += 1 # slide reward
+                reward += 2 # slide reward
 
             elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0:
-                reward += 0.5 # spinner reward
+                reward += 2 # spinner reward
             
         self.hits_prev = hits_count
 
