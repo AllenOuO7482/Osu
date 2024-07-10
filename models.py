@@ -39,27 +39,28 @@ class Actor(nn.Module):
         # self.h1 = nn.Linear(to_linear, 512)
         # self.fc = nn.Linear(512, a_dim)
 
-        self.apply(init_weights_he)
+        # self.apply(init_weights_he)
         # self.fc.apply(init_weight_xavier)
 
     def forward(self, x: torch.Tensor, scale: list):
-        if x.ndim == 3: 
-            x = x.unsqueeze(0)
-        x = enhance_features(x)
-        x = x / 255.0
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        if x.ndim == 4:
-            x = x.view(x.size(0), -1)
-        else:
-            raise ValueError('Invalid input shape in actor')
-        x = F.relu(self.h1(x))
-        x = self.fc(x)
-        if x.shape[0] == 1:
-            x[0, 0].mul_(scale[0])
-            x[0, 1].mul_(scale[1])
-        x = torch.tanh(x)
+        # if x.ndim == 3: 
+        #     x = x.unsqueeze(0)
+        # x = enhance_features(x)
+        # x = x / 255.0
+        # x = F.relu(self.conv1(x))
+        # x = F.relu(self.conv2(x))
+        # x = F.relu(self.conv3(x))
+        # if x.ndim == 4:
+        #     x = x.view(x.size(0), -1)
+        # else:
+        #     raise ValueError('Invalid input shape in actor')
+        # x = F.relu(self.h1(x))
+        # x = self.fc(x)
+        # if x.shape[0] == 1:
+        #     x[0, 0].mul_(scale[0])
+        #     x[0, 1].mul_(scale[1])
+        # x = torch.tanh(x)
+        x = torch.tanh(self.resnet50(x))
         return x
 
     def _get_conv_output(self, channels, height, width):
