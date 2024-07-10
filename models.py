@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 
 def init_weights_he(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -28,15 +29,18 @@ def enhance_features(x: torch.Tensor):
 class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
-        self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
-        to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2]) # flattens the input
-        self.h1 = nn.Linear(to_linear, 512)
-        self.fc = nn.Linear(512, a_dim)
+        self.resnet50 = models.resnet50(pretrained=True)
+        self.resnet50.conv1 = nn.Conv2d(s_dim[0], 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        self.resnet50.fc = nn.Linear(self.resnet50.fc.in_features, a_dim)
+        # self.conv1 = nn.Conv2d(s_dim[0], 16, kernel_size=8, stride=4)
+        # self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
+        # self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
+        # to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2]) # flattens the input
+        # self.h1 = nn.Linear(to_linear, 512)
+        # self.fc = nn.Linear(512, a_dim)
 
         self.apply(init_weights_he)
-        self.fc.apply(init_weight_xavier)
+        # self.fc.apply(init_weight_xavier)
 
     def forward(self, x: torch.Tensor, scale: list):
         if x.ndim == 3: 
