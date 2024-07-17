@@ -12,12 +12,16 @@ import threading
 import pydirectinput as pyd
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+from pathlib import Path
 from collections import deque
 from IPython.display import clear_output 
 
 import replays as r
 from env import OsuEnv
 from models import Actor, Critic
+
+# import warnings
+# warnings.filterwarnings('ignore')
 
 def detect_command(replays, auto_choose_song, enable_save_replay):
     """
@@ -58,7 +62,9 @@ def get_batch(replays: deque, batch_size, device):
         ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 1, 60, 80]``
     """
 
-    batch = random.sample(replays, batch_size)
+    dbatch_size = round((len(dataset) / (len(dataset) + len(replays))) * batch_size)
+    rbatch_size = batch_size - dbatch_size
+    batch = random.sample(dataset, dbatch_size) + random.sample(replays, rbatch_size)
     
     s  = torch.tensor(np.array([s  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     a  = torch.tensor(np.array([a  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
@@ -112,7 +118,7 @@ def params_update(time_steps):
         # when buffer is full, start training
         # sample a batch of data from replay buffer
         s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-        a_bat = A_main(s_bat, scale)
+        a_bat = A_main(s_bat)
         q_bat = Q_main(s_bat, a_bat)
         # calculate loss and update Actor
         loss_a = -torch.mean(q_bat)
@@ -123,7 +129,7 @@ def params_update(time_steps):
         # update Q-function
         y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
         with torch.no_grad():
-            a1_bat = A_target(s1_bat, scale)
+            a1_bat = A_target(s1_bat)
             q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
             y = r_bat + gamma * q1_bat
         # calculate loss and update Critic
@@ -136,13 +142,13 @@ def params_update(time_steps):
         target_update(A_main, A_target, tau)
         target_update(Q_main, Q_target, tau)
 
-        if j % 25 == 0 and j > 0:
+        if j % 10 == 0 and j > 0:
             print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
 
     print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
 def train_agent(episodes: int, buffer: int, batch_size: int, 
-                gamma: float, tau: float, sigma: float, scale: list):
+                gamma: float, tau: float, sigma: float):
     """
     ### train the agent using DDPG algorithm
 
@@ -164,9 +170,20 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
     with open(target_file, 'a', encoding='utf-8') as tgt:
         tgt.write('\n===========\n')
 
-    if epoch == 0:
-        print('start pre-training, time_steps: 1000')
-        params_update(1000)
+    # if epoch == 0 and not is_load:
+    #     print('start pre-training, time_steps: 500')
+    #     params_update(500)
+    #     checkpoint = {
+    #         'epochs': 0,
+    #         'hyperparameters': hyperparam_dict,
+    #         'actor_state_dict': A_main.state_dict(),
+    #         'critic_state_dict': Q_main.state_dict(),
+    #         'optimizer_a_state_dict': opt_a.state_dict(),
+    #         'optimizer_c_state_dict': opt_c.state_dict(),
+    #         'losses_a': losses_a,
+    #         'losses_c': losses_c
+    #     }
+    #     torch.save(checkpoint, f'{model_folder}/checkpoint_0.pth')
 
     for i in range(epoch, episodes):
         s = env.reset()
@@ -198,7 +215,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 time.sleep(0.05)
 
             # collect experience 
-            a = A_main(s, scale).detach()
+            a = A_main(s).detach()
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -208,24 +225,6 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             # env.render()
 
             a_ = a.squeeze(0).cpu().numpy()
-            if i >= 10 and len(replays) >= buffer * 0.3 and start_training:
-                if a_[0] <= -0.99 or a_[0] >= 0.99 and scale[0] >= 0.8: 
-                    scale[0] *= 0.9999
-                    if r < 0: 
-                        r -= 1
-
-                elif a_[1] <= -0.99 or a_[1] >= 0.99 and scale[1] >= 0.8:
-                    scale[1] *= 0.9999
-                    if r < 0: 
-                        r -= 1
-                
-                if scale[0] < 0.8:
-                    scale[0] = 0.8
-
-                if scale[1] < 0.8:
-                    scale[1] = 0.8
-
-            hyperparam_dict['scale'] = scale
 
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
             # TODO: remove all zero rewards from replay buffer
@@ -256,7 +255,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 hyperparam_dict['sigma'] = sigma
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
                 time_steps += 1
-                print('reward:', r, 'sigma: %.4f' % sigma, 'scale %.4f' % scale[0], '%.4f' % scale[1])
+                print('reward:', r, 'sigma: %.4f' % sigma)
                 
             episode_reward += r
             
@@ -276,13 +275,12 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         write_log_file(os.path.join(source_folder, 'output_log.txt'), target_file)
         rewards.append(episode_reward)
 
-        if len(replays) >= buffer * 0.3 and start_training:
-            time_steps *= 2.5
+        if (len(replays) + len(dataset)) >= buffer * 0.3 and start_training:
 
             print('Start training, time_steps:', time_steps, 'epoches:', i)
             params_update(time_steps)
 
-        if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.3:
+        if i > 1 and i % 2 == 0 and len(dataset) +len(replays) >= buffer * 0.3:
             checkpoint = {
                 'epochs': i+1,
                 'hyperparameters': hyperparam_dict,
@@ -332,9 +330,11 @@ if __name__ == '__main__':
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
     rewards = []
-    model_folder = os.path.join(os.path.dirname(__file__), 'saved_models')
-    replays_folder = os.path.join(os.path.dirname(__file__), 'Replays')
+    model_folder = Path(__file__).parent.joinpath('saved_models')
+    dataset_folder = Path(__file__).parent.joinpath('Dataset')
+    replays_folder = Path(__file__).parent.joinpath('Replays')
     os.makedirs(model_folder, exist_ok=True)
+    os.makedirs(dataset_folder, exist_ok=True)
     os.makedirs(replays_folder, exist_ok=True)
 
     if is_load:
@@ -362,8 +362,8 @@ if __name__ == '__main__':
         # define actor-critic models without a saved model
         epoch = 0
         hyperparam_dict = {
-            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
-            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': [1, 1]
+            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 64,
+            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
@@ -402,8 +402,8 @@ if __name__ == '__main__':
     sigma = hyperparam_dict['sigma']            # noise standard deviation
     buffer = hyperparam_dict['buffer']          # replay buffer size
     batch_size = hyperparam_dict['batch_size']  # batch size
-    scale = hyperparam_dict['scale']            # scale factor for action space
-    replays = r.load(buffer)                    # deque of replays
+    dataset = r.load(buffer, folder_path=dataset_folder)
+    replays = r.load(buffer-5000, folder_path=replays_folder) # deque of replays
     # replays = deque(maxlen=buffer)
     print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
 
@@ -424,6 +424,6 @@ if __name__ == '__main__':
     print('all initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
  
     # train agent with replays
-    train_agent(episodes, buffer, batch_size, gamma, tau, sigma, scale)
+    train_agent(episodes, buffer, batch_size, gamma, tau, sigma)
 
 cv2.destroyAllWindows()
