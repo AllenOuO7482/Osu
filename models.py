@@ -73,10 +73,10 @@ class Critic(nn.Module):
         self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1)
         
         to_linear = self._get_conv_output(s_dim[0], s_dim[1], s_dim[2])
-        self.h1s = nn.Linear(to_linear, 32)
-        self.h1a = nn.Linear(a_dim, 32)
-        self.h2 = nn.Linear(64, 32)
-        self.fc = nn.Linear(32, 1)
+        self.h1s = nn.Linear(to_linear, 64)
+        self.h1a = nn.Linear(a_dim, 64)
+        self.h2 = nn.Linear(128, 64)
+        self.fc = nn.Linear(64, 1)
 
         self.apply(init_weights_he)
 

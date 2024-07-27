@@ -65,7 +65,7 @@ def get_batch(replays: deque, batch_size, device):
     r  = torch.tensor(np.array([r  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     s1 = torch.tensor(np.array([s1 for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
 
-    return s, a, r, s1
+    return s, a, r, s1 
 
 def choose_song():
     time.sleep(1), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
@@ -112,8 +112,8 @@ def params_update(time_steps):
         # when buffer is full, start training
         # sample a batch of data from replay buffer
         s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-        a_bat = A_main(s_bat, scale)
-        q_bat = Q_main(s_bat, a_bat)
+        a_bat = A_main(s_bat[:, :state_dim[0], :, :], scale)
+        q_bat = Q_main(s_bat[:, :state_dim[0], :, :], a_bat)
         # calculate loss and update Actor
         loss_a = -torch.mean(q_bat)
         opt_a.zero_grad()
@@ -121,10 +121,10 @@ def params_update(time_steps):
         opt_a.step()
         losses_a.append(loss_a.item())
         # update Q-function
-        y_hat = Q_main(s_bat, a0_bat) # predicted Q-value
+        y_hat = Q_main(s_bat[:, :state_dim[0], :, :], a0_bat) # predicted Q-value
         with torch.no_grad():
-            a1_bat = A_target(s1_bat, scale)
-            q1_bat = Q_target(s1_bat, a1_bat) # next state's Q-value
+            a1_bat = A_target(s1_bat[:, :state_dim[0], :, :], scale)
+            q1_bat = Q_target(s1_bat[:, :state_dim[0], :, :], a1_bat) # next state's Q-value
             y = r_bat + gamma * q1_bat
         # calculate loss and update Critic
         loss_c = loss_fn(y.detach(), y_hat)
@@ -164,13 +164,25 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
     with open(target_file, 'a', encoding='utf-8') as tgt:
         tgt.write('\n===========\n')
 
-    if epoch == 0:
+    if epoch == 0 and not is_load:
         print('start pre-training, time_steps: 1000')
         params_update(1000)
+        
+        checkpoint = {
+            'epochs': 0,
+            'hyperparameters': hyperparam_dict,
+            'actor_state_dict': A_main.state_dict(),
+            'critic_state_dict': Q_main.state_dict(),
+            'optimizer_a_state_dict': opt_a.state_dict(),
+            'optimizer_c_state_dict': opt_c.state_dict(),
+            'losses_a': losses_a,
+            'losses_c': losses_c
+        }
+        torch.save(checkpoint, f'{model_folder}/checkpoint_0.pth')
 
     for i in range(epoch, episodes):
         s = env.reset()
-        s = torch.tensor(s, dtype=torch.float32).to(device)
+        s = torch.tensor(s[:state_dim[0], :, :], dtype=torch.float32).to(device)
         if not dc_process.is_alive():
             dc_process.start()
 
@@ -198,7 +210,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 time.sleep(0.05)
 
             # collect experience 
-            a = A_main(s, scale).detach()
+            a = A_main(s[:state_dim[0], :, :], scale).detach()
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -207,23 +219,23 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             s1, r, done, _ = env.step(a0)
             # env.render()
 
-            a_ = a.squeeze(0).cpu().numpy()
-            if i >= 10 and len(replays) >= buffer * 0.3 and start_training:
-                if a_[0] <= -0.99 or a_[0] >= 0.99 and scale[0] >= 0.8: 
-                    scale[0] *= 0.9999
-                    if r < 0: 
-                        r -= 1
+            # a_ = a.squeeze(0).cpu().numpy()
+            # if i >= 10 and len(replays) >= buffer * 0.3 and start_training:
+            #     if a_[0] <= -0.99 or a_[0] >= 0.99 and scale[0] >= 0.8: 
+            #         scale[0] *= 0.9999
+            #         if r < 0: 
+            #             r -= 1
 
-                elif a_[1] <= -0.99 or a_[1] >= 0.99 and scale[1] >= 0.8:
-                    scale[1] *= 0.9999
-                    if r < 0: 
-                        r -= 1
+            #     elif a_[1] <= -0.99 or a_[1] >= 0.99 and scale[1] >= 0.8:
+            #         scale[1] *= 0.9999
+            #         if r < 0: 
+            #             r -= 1
                 
-                if scale[0] < 0.8:
-                    scale[0] = 0.8
+            #     if scale[0] < 0.8:
+            #         scale[0] = 0.8
 
-                if scale[1] < 0.8:
-                    scale[1] = 0.8
+            #     if scale[1] < 0.8:
+            #         scale[1] = 0.8
 
             hyperparam_dict['scale'] = scale
 
@@ -233,10 +245,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 if r < 0:
                     sigma *= 1.002
 
-                elif r == 1 and sigma >= 0.03:
-                    sigma *= 0.995
-
-                elif sigma < 0.08:
+                elif sigma < 0.06:
                     if r < 0:
                         sigma *= 1.001
 
@@ -247,11 +256,14 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                     elif r == 1:
                         sigma *= 0.9998
 
+                elif r == 1 and sigma >= 0.03:
+                    sigma *= 0.995
+
                 if sigma < 0.01:
                     sigma = 0.01 # minimum noise standard deviation
 
-                elif sigma > 0.15:
-                    sigma = 0.15 # maximum noise standard deviation
+                elif sigma > 0.1:
+                    sigma = 0.1 # maximum noise standard deviation
 
                 hyperparam_dict['sigma'] = sigma
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
@@ -277,7 +289,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         rewards.append(episode_reward)
 
         if len(replays) >= buffer * 0.3 and start_training:
-            time_steps *= 2.5
+            time_steps = int(time_steps * 2.5)
 
             print('Start training, time_steps:', time_steps, 'epoches:', i)
             params_update(time_steps)
@@ -327,7 +339,7 @@ if __name__ == '__main__':
     
     start_time = time.time()
     # define state, action and reward 
-    state_dim = (4, 60, 80)
+    state_dim = (2, 60, 80)
     action_dim = 2
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
@@ -363,7 +375,7 @@ if __name__ == '__main__':
         epoch = 0
         hyperparam_dict = {
             'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
-            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15, 'scale': [1, 1]
+            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.1, 'scale': [1, 1]
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
@@ -374,18 +386,6 @@ if __name__ == '__main__':
         
         losses_a = []
         losses_c = []
-
-        checkpoint = {
-            'epochs': 0,
-            'hyperparameters': hyperparam_dict,
-            'actor_state_dict': A_main.state_dict(),
-            'critic_state_dict': Q_main.state_dict(),
-            'optimizer_a_state_dict': opt_a.state_dict(),
-            'optimizer_c_state_dict': opt_c.state_dict(),
-            'losses_a': losses_a,
-            'losses_c': losses_c
-        }
-        torch.save(checkpoint, f'{model_folder}/checkpoint_0.pth')
 
     # define target networks
     A_target = copy.deepcopy(A_main).to(device)

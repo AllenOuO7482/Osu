@@ -34,7 +34,7 @@ class OsuEnv(Env):
         self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
 
         self.raw_img_queue = raw_img_queue 
-        self.temp_img_queue = deque(maxlen=25)
+        self.temp_img_queue = deque(maxlen=40)
         for i in range(self.temp_img_queue.maxlen):
             zero_img = {'img': np.zeros(self.screen_shape, dtype=np.float32), 'time': time.time()}
             self.temp_img_queue.append(zero_img)
