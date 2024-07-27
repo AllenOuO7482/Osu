@@ -9,6 +9,7 @@ import copy
 import cv2
 import os
 import threading
+from pathlib import Path
 import pydirectinput as pyd
 import multiprocessing as mp
 import matplotlib.pyplot as plt
@@ -112,7 +113,7 @@ def params_update(time_steps):
         # when buffer is full, start training
         # sample a batch of data from replay buffer
         s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-        a_bat = A_main(s_bat[:, :state_dim[0], :, :], scale)
+        a_bat = A_main(s_bat[:, :state_dim[0], :, :])
         q_bat = Q_main(s_bat[:, :state_dim[0], :, :], a_bat)
         # calculate loss and update Actor
         loss_a = -torch.mean(q_bat)
@@ -123,7 +124,7 @@ def params_update(time_steps):
         # update Q-function
         y_hat = Q_main(s_bat[:, :state_dim[0], :, :], a0_bat) # predicted Q-value
         with torch.no_grad():
-            a1_bat = A_target(s1_bat[:, :state_dim[0], :, :], scale)
+            a1_bat = A_target(s1_bat[:, :state_dim[0], :, :])
             q1_bat = Q_target(s1_bat[:, :state_dim[0], :, :], a1_bat) # next state's Q-value
             y = r_bat + gamma * q1_bat
         # calculate loss and update Critic
@@ -217,25 +218,6 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             except: pass
 
             s1, r, done, _ = env.step(a0)
-            # env.render()
-
-            # a_ = a.squeeze(0).cpu().numpy()
-            # if i >= 10 and len(replays) >= buffer * 0.3 and start_training:
-            #     if a_[0] <= -0.99 or a_[0] >= 0.99 and scale[0] >= 0.8: 
-            #         scale[0] *= 0.9999
-            #         if r < 0: 
-            #             r -= 1
-
-            #     elif a_[1] <= -0.99 or a_[1] >= 0.99 and scale[1] >= 0.8:
-            #         scale[1] *= 0.9999
-            #         if r < 0: 
-            #             r -= 1
-                
-            #     if scale[0] < 0.8:
-            #         scale[0] = 0.8
-
-            #     if scale[1] < 0.8:
-            #         scale[1] = 0.8
 
             hyperparam_dict['scale'] = scale
 
@@ -339,14 +321,16 @@ if __name__ == '__main__':
     
     start_time = time.time()
     # define state, action and reward 
-    state_dim = (2, 60, 80)
+    state_dim = (4, 60, 80)
     action_dim = 2
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
     rewards = []
-    model_folder = os.path.join(os.path.dirname(__file__), 'saved_models')
-    replays_folder = os.path.join(os.path.dirname(__file__), 'Replays')
+    model_folder = Path(__file__).parent.joinpath('saved_models')
+    dataset_folder = Path(__file__).parent.joinpath('Dataset')
+    replays_folder = Path(__file__).parent.joinpath('Replays')
     os.makedirs(model_folder, exist_ok=True)
+    os.makedirs(dataset_folder, exist_ok=True)
     os.makedirs(replays_folder, exist_ok=True)
 
     if is_load:
@@ -374,8 +358,8 @@ if __name__ == '__main__':
         # define actor-critic models without a saved model
         epoch = 0
         hyperparam_dict = {
-            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 32, 
-            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.1, 'scale': [1, 1]
+            'episodes': 500, 'time_steps': 500, 'buffer': 25000, 'batch_size': 64,
+            'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15
         }
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
@@ -386,6 +370,18 @@ if __name__ == '__main__':
         
         losses_a = []
         losses_c = []
+
+        checkpoint = {
+            'epochs': 0,
+            'hyperparameters': hyperparam_dict,
+            'actor_state_dict': A_main.state_dict(),
+            'critic_state_dict': Q_main.state_dict(),
+            'optimizer_a_state_dict': opt_a.state_dict(),
+            'optimizer_c_state_dict': opt_c.state_dict(),
+            'losses_a': losses_a,
+            'losses_c': losses_c
+        }
+        torch.save(checkpoint, f'{model_folder}/checkpoint_0.pth')
 
     # define target networks
     A_target = copy.deepcopy(A_main).to(device)
@@ -402,8 +398,8 @@ if __name__ == '__main__':
     sigma = hyperparam_dict['sigma']            # noise standard deviation
     buffer = hyperparam_dict['buffer']          # replay buffer size
     batch_size = hyperparam_dict['batch_size']  # batch size
-    scale = hyperparam_dict['scale']            # scale factor for action space
-    replays = r.load(buffer)                    # deque of replays
+    dataset = r.load(5000, folder_path=dataset_folder)
+    replays = r.load(buffer-5000, folder_path=replays_folder) # deque of replays
     # replays = deque(maxlen=buffer)
     print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
 
@@ -424,6 +420,6 @@ if __name__ == '__main__':
     print('all initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
  
     # train agent with replays
-    train_agent(episodes, buffer, batch_size, gamma, tau, sigma, scale)
+    train_agent(episodes, buffer, batch_size, gamma, tau, sigma)
 
 cv2.destroyAllWindows()
