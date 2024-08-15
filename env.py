@@ -4,6 +4,7 @@ from collections import deque
 import cv2
 import mss
 import time
+import json
 import os
 import threading
 import numpy as np
@@ -55,6 +56,7 @@ class OsuEnv(Env):
         elif not osu_window:
             raise Exception("Osu window is not found")
 
+        self.stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
         stream_companion = gw.getWindowsWithTitle('StreamCompanion')
         if test_mode:
             pass
@@ -62,8 +64,11 @@ class OsuEnv(Env):
         elif not stream_companion:
             raise Exception("StreamCompanion window is not found")
 
-        self.hits_prev = (0, 0, 0, 0)
+        self.hits_prev = {'300': 0, '100': 0, '50': 0, 'miss': 0, 'score': 0}
+        self.hit_errors_prev = ['']
+        self.map_data_prev = {"combo": "0", "combo_left": "0", "slider_breaks": "0", "miss": "0"}
         self.song_completion_prev = float('-inf')
+
         p1 = threading.Thread(target=self._detect_game_state, daemon=True)
         p1.start()
 
@@ -83,11 +88,11 @@ class OsuEnv(Env):
         # print('move mouse to', pyd.position())
 
         self.state = self._process_frame() # state.shape = 
-        reward = self._calc_score()
+        reward = self.calc_reward()
         reward = max(-1, min(1, reward))
         
         # if self.game_end and self.in_game:
-        #     done = True # TODO: add game end detection
+        #     done = True 
         # else:
         #     done = False
         done = None
@@ -150,54 +155,90 @@ class OsuEnv(Env):
             cv2.waitKey(1)
         except Exception as e:
             print("update screen failed", e)
-    
-    def _record_game_state(self):
-        pass
-    
-    def _calc_score(self):
-        stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
-        with open(os.path.join(stream_companion_path, 'livepp_hits.txt'), 'r') as f:
-            file = f.read()
-            if len(file) <= 1:
+
+    def calc_reward(self):
+        reward = 0
+        with open(os.path.join(self.stream_companion_path, 'map_data.txt'), 'r') as f:
+            map_data = json.loads('{' + f.read() + '}')
+            if map_data == {}:
+                return 0
+
+        with open(os.path.join(self.stream_companion_path, 'hit_errors.txt'), 'r') as f:
+            hit_errors = f.read().split(',')
+            if hit_errors == [''] or hit_errors == [' ']:
                 return 0
             
+            elif hit_errors != self.hit_errors_prev:
+                # print('hit error:', hit_errors)
+                pass
+
+        # print(map_data)
+        if map_data == self.map_data_prev and hit_errors == self.hit_errors_prev and map_data['miss'] == self.map_data_prev['miss'] and self.map_data_prev['slider_breaks'] == map_data['slider_breaks']:
+            # no new hit
+            # print('no new hit', map_data, flush=True)
+            return 0
+        
+        elif map_data['miss'] != self.map_data_prev['miss'] or map_data['slider_breaks'] != self.map_data_prev['slider_breaks']:
+            # miss or slider break
+            # print('miss or slider break', map_data, flush=True)
+            reward += -1
+
+        elif map_data['combo'] > self.map_data_prev['combo'] and hit_errors == self.hit_errors_prev:
+            # slider not broken, but not hitted circle
+            # print('slider not broken, but not hitted circle', map_data, flush=True)
+            reward += 1
+
+        elif hit_errors != self.hit_errors_prev:    
+            # hitted circle, calculate last hit's score by offset
+            # print('hitted circle', map_data, flush=True)
+            offset = abs(int(hit_errors[-1]))
+            reward += 1 - ((offset - 20) * (offset >= 20) / 100) # +-100ms error range
+
+        else:
+            print('unknown condition', map_data, flush=True)
+
+        self.map_data_prev = map_data
+        self.hit_errors_prev = hit_errors
+        return reward
+
+    def _calc_score(self):
+        """
+        This function is deprecated, use _calc_reward instead
+        """
+
+        with open(os.path.join(self.stream_companion_path, 'livepp_hits.txt'), 'r') as f:
+            hits = json.loads('{' + f.read() + '}')
+            if hits == {}:
+                return 0
+
+        hits_delta = {
             # expect input 0 0 0 0 12345
-            hits = file.split() 
-            hits_300 = int(hits[0])
-            hits_100 = int(hits[1])
-            hits_50 = int(hits[2])
-            hits_miss = int(hits[3])
-            score = int(hits[-1])
-            
-        hits_count = (hits_300, hits_100, hits_50, hits_miss, score)
-        score_delta = (
-            hits_count[0] - self.hits_prev[0], 
-            hits_count[1] - self.hits_prev[1], 
-            hits_count[2] - self.hits_prev[2],
-            hits_count[3] - self.hits_prev[3],
-            hits_count[-1] - self.hits_prev[-1]
-        )
+            '300':   int(hits['300']) - int(self.hits_prev['300']),
+            '100':   int(hits['100']) - int(self.hits_prev['100']),
+            '50':    int(hits['50']) - int(self.hits_prev['50']),
+            'miss':  int(hits['miss']) - int(self.hits_prev['miss']),
+            'score': int(hits['score']) - int(self.hits_prev['score']),
+        }
 
         reward = 0
-        if score_delta[0] > 0 or score_delta[1] > 0 or score_delta[2] > 0 or score_delta[3] > 0 and not self.game_end:
-            reward += score_delta[0] * 2 + score_delta[1] * 0.5 + score_delta[2] * 0.2 + score_delta[3] * (-1)
+        if hits_delta['300'] > 0 or hits_delta['100'] > 0 or hits_delta['50'] > 0 or hits_delta['miss'] > 0 and not self.game_end:
+            reward += hits_delta['300'] * 2 + hits_delta['100'] * 1.5 + hits_delta['50'] * 1 + hits_delta['miss'] * (-1)
 
-        elif score_delta[-1] > 0:
-            if score_delta[-1] == 10:
+        elif hits_delta['score'] > 0:
+            if hits_delta['score'] == 10:
                 reward += 2 # slide reward
 
-            elif score_delta[-1] % 100 == 0 and score_delta[-1] != 0:
+            elif hits_delta['score'] % 100 == 0 and hits_delta['score'] != 0:
                 reward += 2 # spinner reward
-            
-        self.hits_prev = hits_count
+
+        self.hits_prev = hits
 
         return float(reward)
 
     def _detect_game_state(self):
-        stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
         T = 0
         while True:
-            with open(os.path.join(stream_companion_path, 'song_completion.txt'), 'r') as f:
+            with open(os.path.join(self.stream_companion_path, 'song_completion.txt'), 'r') as f:
                 file = f.read()
                 if len(file) < 3:
                     time.sleep(0.05)
@@ -278,7 +319,10 @@ if __name__ == '__main__':
     
     while True:
         env.state = env._process_frame()
-        env.render()
-        time.sleep(0.01)
+        s, r, _, _ = env.step(env.action_space.sample())
+        if r != 0:
+            print(s.shape, r)
+        # env.render()
+        time.sleep(0.05)
 
     cv2.destroyAllWindows()

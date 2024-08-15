@@ -14,17 +14,6 @@ def init_weight_xavier(m):
         if m.bias is not None:
             nn.init.constant_(m.bias, 0)
 
-def enhance_features(x: torch.Tensor):
-    # 223 to 255 -> -1 to 255 -> 0 to 255
-    x = torch.where(x < 223, torch.tensor(0, dtype=x.dtype, device=x.device), x)
-    mask = (x >= 223)
-    x[mask] = ((x[mask] - 223) / (255 - 223)) * 256 - 1
-    x = torch.where(x < 0, torch.tensor(0, dtype=x.dtype, device=x.device), x)
-    # for i in range(x.shape[0]):
-    #     # 1 0.85 0.7 0.55
-    #     x[i].mul_(1.0 - 0.15 * i)
-    return x
-
 class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
         super(Actor, self).__init__()
@@ -38,10 +27,10 @@ class Actor(nn.Module):
         self.apply(init_weights_he)
         self.fc.apply(init_weight_xavier)
 
-    def forward(self, x: torch.Tensor, scale: list):
+    def forward(self, x: torch.Tensor):
         if x.ndim == 3: 
             x = x.unsqueeze(0)
-        x = enhance_features(x)
+        # x = enhance_features(x)
         x = x / 255.0
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -52,9 +41,6 @@ class Actor(nn.Module):
             raise ValueError('Invalid input shape in actor')
         x = F.relu(self.h1(x))
         x = self.fc(x)
-        if x.shape[0] == 1:
-            x[0, 0].mul_(scale[0])
-            x[0, 1].mul_(scale[1])
         x = torch.tanh(x)
         return x
 
@@ -83,7 +69,7 @@ class Critic(nn.Module):
     def forward(self, s: torch.Tensor, a: torch.Tensor):
         if s.ndim == 3:
             s = s.unsqueeze(0)
-        s = enhance_features(s)
+        # s = enhance_features(s)
         xs = s / 255.0
         xs = F.relu(self.conv1(xs))
         xs = F.relu(self.conv2(xs))

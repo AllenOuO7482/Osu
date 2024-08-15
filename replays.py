@@ -13,45 +13,11 @@ import pydirectinput as pyd
 
 from env import OsuEnv
 
-def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
+def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Dataset'):
     raw_img_queue = mp.Queue(maxsize=3)
-    env = OsuEnv(raw_img_queue)
-    num_processes = 3
-    processes = []
-    for _ in range(num_processes):
-        p = mp.Process(target=env._get_screen, daemon=True)
-        p.start()
-        processes.append(p)
+    data_queue_len = 4
+    data_queue = deque(maxlen=data_queue_len)
 
-    s = env.reset() # 
-    print('initialization done')
-    replay_count = 2001
-    while replay_count < 5000:
-        while not env.sd['status'] == 'Playing' or env.stop_mouse or env.is_breaktime:
-            # waiting for game start, or pausing, or break time
-            time.sleep(0.1)
-
-        # save last screen array, action, reward, now screen array
-        x, y = pyd.position()
-        a = np.array([0, 0], dtype=np.float32)
-        field = (230, 40, 1080, 810)
-
-        a[0] = (x - field[0]) / (field[2] / 2) - 1
-        a[1] = (y - field[1]) / (field[3] / 2) - 1
-        r = env._calc_score()
-
-        if (r == 0 and random.random() < 0.1) or r != 0:
-            s1 = env._process_frame() # 
-
-            batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
-            np.savez_compressed(os.path.join(save_folder, f'{replay_count+1}.npz') , batch)
-            replay_count += 1
-            s = s1
-
-        time.sleep(1/30)
-
-def record_2_frames(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
-    raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
     num_processes = 3
     processes = []
@@ -61,11 +27,15 @@ def record_2_frames(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
         processes.append(p)
 
     s = env.reset() # (4, 60, 80)
+    now = time.time()
+    frame_count = 0
+    
     print('initialization done')
-    replay_count = 0
+    replay_count = os.listdir(save_folder).__len__()
     while replay_count < 5000:
-        while not env.in_game or env.stop_mouse or env.is_breaktime:
+        while not env.sd['status'] == 'Playing' or env.stop_mouse or env.is_breaktime:
             # waiting for game start, or pausing, or break time
+            data_queue.clear()
             time.sleep(0.1)
 
         # save last screen array, action, reward, now screen array
@@ -75,20 +45,44 @@ def record_2_frames(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
 
         a[0] = (x - field[0]) / (field[2] / 2) - 1
         a[1] = (y - field[1]) / (field[3] / 2) - 1
-        r = env._calc_score()
+        r = env.calc_reward()
 
-        if (r == 0 and random.random() < 0.1) or r != 0:
-            new_s = env._process_frame() # (60, 80)
-            new_s = np.expand_dims(new_s, axis=0) # (1, 60, 80)
-            s1 = np.delete(s, 0, axis=0) # (3, 60, 80)
-            s1 = np.concatenate((s1, new_s), axis=0) # (4, 60, 80)
+        s1 = env._process_frame()
+        data_queue.append({'s': s, 'a': a, 'r': r, 's1': s1})
+        while len(data_queue) > data_queue_len:
+            data_queue.popleft()
 
-            batch = {'s': s, 'a': a, 'r': [r / 10], 's1': s1} # s, a, r, s1
+        if data_queue[-1]['r'] != 0 and len(data_queue) == data_queue_len:
+            batch = {
+                's': data_queue[0]['s'], 
+                'a': data_queue[0]['a'], 
+                'r': [data_queue[-1]['r'] / 10], 
+                's1': data_queue[0]['s1']
+            } # s, a, r, s1
+
             np.savez_compressed(os.path.join(save_folder, f'{replay_count+1}.npz') , batch)
-            replay_count += 1   
-            s = s1
+            replay_count += 1
+        
+            if replay_count % 100 == 0:
+                print(f"Saved replay: {replay_count}.npz")
 
-        time.sleep(1/30)
+        s = s1
+        elapsed_time = time.time() - now
+        if elapsed_time >= 1 and frame_count > 0:
+            fps_value = frame_count / elapsed_time
+            print('FPS: %.2f' % (fps_value))
+            if fps_value <= 20:
+                data_queue_len = 2
+            elif fps_value > 20 and fps_value <= 33:
+                data_queue_len = 3
+            elif fps_value > 33:
+                data_queue_len = 4
+
+            now = time.time()
+            frame_count = 0
+
+        else:
+            frame_count += 1
 
 def load_worker(q, q_lock, r_lock, replays):
     while True:
@@ -181,7 +175,6 @@ def save(replays: deque, enable_save_replay):
             data_queue.put((batch, i+1))
 
         now = time.time()
-        print("start saving replays")
 
         processes = []
         for i in range(16):

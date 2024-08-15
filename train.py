@@ -37,13 +37,14 @@ def detect_command(replays, auto_choose_song, enable_save_replay):
                 time.sleep(0.1)
         
         elif keyboard.is_pressed('alt+s') and enable_save_replay:
+            print("start saving replays")
             r.save(replays, enable_save_replay)
             while keyboard.is_pressed('alt+s'):
                 time.sleep(0.1)
 
         time.sleep(0.05)
 
-def get_batch(replays: deque, batch_size, device):
+def get_batch(dataset: deque, replays: deque, batch_size, device):
     """
     ### Get a batch of data from replay buffer.
 
@@ -59,14 +60,16 @@ def get_batch(replays: deque, batch_size, device):
         ``s1``: torch.tensor, next state tensor with shape ``[batch_size, 1, 60, 80]``
     """
 
-    batch = random.sample(replays, batch_size)
+    dbatch_size = int(len(dataset) / (len(dataset) + len(replays)) * batch_size)
+    rbatch_size = batch_size - dbatch_size
+    batch = random.sample(dataset, dbatch_size) + random.sample(replays, rbatch_size)
     
     s  = torch.tensor(np.array([s  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     a  = torch.tensor(np.array([a  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     r  = torch.tensor(np.array([r  for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
     s1 = torch.tensor(np.array([s1 for (s, a, r, s1) in batch]), dtype=torch.float32).to(device)
 
-    return s, a, r, s1 
+    return s, a, r, s1
 
 def choose_song():
     time.sleep(1), pyd.keyDown('esc'), pyd.keyUp('esc'), print('key esc down')
@@ -112,7 +115,7 @@ def params_update(time_steps):
     for j in range(time_steps):
         # when buffer is full, start training
         # sample a batch of data from replay buffer
-        s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
+        s_bat, a0_bat, r_bat, s1_bat = get_batch(dataset, replays, batch_size, device)
         a_bat = A_main(s_bat[:, :state_dim[0], :, :])
         q_bat = Q_main(s_bat[:, :state_dim[0], :, :], a_bat)
         # calculate loss and update Actor
@@ -137,13 +140,13 @@ def params_update(time_steps):
         target_update(A_main, A_target, tau)
         target_update(Q_main, Q_target, tau)
 
-        if j % 25 == 0 and j > 0:
+        if j % 10 == 0 and j > 0:
             print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
 
     print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
 def train_agent(episodes: int, buffer: int, batch_size: int, 
-                gamma: float, tau: float, sigma: float, scale: list):
+                gamma: float, tau: float, sigma: float):
     """
     ### train the agent using DDPG algorithm
 
@@ -165,7 +168,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
     with open(target_file, 'a', encoding='utf-8') as tgt:
         tgt.write('\n===========\n')
 
-    if epoch == 0 and not is_load:
+    if epoch == 0 and not is_load and len(replays) + len(dataset) >= buffer * 0.4:
         print('start pre-training, time_steps: 1000')
         params_update(1000)
         
@@ -189,6 +192,8 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
 
         episode_reward = 0
         time_steps = 0
+        # data_queue_len = 4
+        # data_queue = deque(maxlen=data_queue_len)
         done = False
         start_training = False
         
@@ -198,7 +203,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             time.sleep(0.05)
             if env.sd['status'] == 'ResultsScreen' and auto_choose_song.value:
                 print('auto choose a song')
-                if not len(replays) >= buffer * 0.3: 
+                if not len(replays) + len(dataset) >= buffer * 0.4: 
                     time.sleep(5)
 
                 choose_song()
@@ -211,7 +216,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 time.sleep(0.05)
 
             # collect experience 
-            a = A_main(s[:state_dim[0], :, :], scale).detach()
+            a = A_main(s[:state_dim[0], :, :]).detach()
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -219,38 +224,28 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
 
             s1, r, done, _ = env.step(a0)
 
-            hyperparam_dict['scale'] = scale
-
             s1 = torch.tensor(s1, dtype=torch.float32).to(device)
-            # TODO: remove all zero rewards from replay buffer
+
+            # data_queue.append({'s': s.cpu().numpy(), 'a': a0, 'r': [r / 10], 's1': s1.cpu().numpy()}) 
+            # while len(data_queue) > data_queue_len:
+            #     data_queue.popleft()
+
             if r != 0 and r < 10:
-                if r < 0:
-                    sigma *= 1.002
+                if r < 0: sigma *= 1.002
+                elif sigma < 0.03:
+                    if r < 0: sigma *= 1.001
+                    elif r > 0 and r <= 0.5: sigma *= 1.0005
+                    elif r > 0.5: sigma *= 0.9998
+                elif r > 0.5 and sigma >= 0.03: sigma *= 0.995
 
-                elif sigma < 0.06:
-                    if r < 0:
-                        sigma *= 1.001
-
-                    elif r == 0.2:
-                        r = -0.5
-                        sigma *= 1.001
-
-                    elif r == 1:
-                        sigma *= 0.9998
-
-                elif r == 1 and sigma >= 0.03:
-                    sigma *= 0.995
-
-                if sigma < 0.01:
-                    sigma = 0.01 # minimum noise standard deviation
-
-                elif sigma > 0.1:
-                    sigma = 0.1 # maximum noise standard deviation
+                if sigma < 0.01: sigma = 0.01 # minimum noise standard deviation
+                elif sigma > 0.1: sigma = 0.1 # maximum noise standard deviation
 
                 hyperparam_dict['sigma'] = sigma
+                # push rewards forward
                 replays.append((s.cpu().numpy(), a0, [r / 10], s1.cpu().numpy()))
                 time_steps += 1
-                print('reward:', r, 'sigma: %.4f' % sigma, 'scale %.4f' % scale[0], '%.4f' % scale[1])
+                print('reward:', r, 'sigma: %.4f' % sigma)
                 
             episode_reward += r
             
@@ -259,6 +254,13 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             if elapsed_time >= 1:
                 fps_value = frame_count / elapsed_time
                 print('FPS: %.2f' % (fps_value))
+
+                if fps_value <= 20:
+                    data_queue_len = 2
+                elif fps_value > 20 and fps_value <= 34:
+                    data_queue_len = 3
+                elif fps_value > 34:
+                    data_queue_len = 4
 
                 now = time.time()
                 frame_count = 0
@@ -270,13 +272,13 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         write_log_file(os.path.join(source_folder, 'output_log.txt'), target_file)
         rewards.append(episode_reward)
 
-        if len(replays) >= buffer * 0.3 and start_training:
+        if len(replays) + len(dataset) >= buffer * 0.4 and start_training:
             time_steps = int(time_steps * 2.5)
 
             print('Start training, time_steps:', time_steps, 'epoches:', i)
             params_update(time_steps)
 
-        if i > 1 and i % 2 == 0 and len(replays) >= buffer * 0.3:
+        if i > 1 and i % 2 == 0 and len(replays) + len(dataset) >= buffer * 0.4:
             checkpoint = {
                 'epochs': i+1,
                 'hyperparameters': hyperparam_dict,
@@ -364,8 +366,8 @@ if __name__ == '__main__':
         # define actor-critic models with default hyperparameters
         A_main = Actor(state_dim, action_dim).to(device)
         Q_main = Critic(state_dim, action_dim).to(device)
-        opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
-        opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
+        opt_a = optim.Adam(A_main.parameters(), lr=2e-5) # Actor optimizer
+        opt_c = optim.Adam(Q_main.parameters(), lr=2e-4) # Critic optimizer
         loss_fn = nn.MSELoss() # Critic loss function
         
         losses_a = []
