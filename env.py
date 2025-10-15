@@ -11,6 +11,8 @@ import pygetwindow as gw
 import pydirectinput as pyd
 import multiprocessing as mp
 
+from constants import SC_PATH
+
 class OsuEnv(Env):
     def __init__(self, raw_img_queue, test_mode=False):
         super(OsuEnv, self).__init__()
@@ -21,11 +23,12 @@ class OsuEnv(Env):
             shape=(2,)
         )
         
+        self.frames_count = 1
         self.screen_shape = (60, 80)
         screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state_shape = (4, 60, 80)
+        self.state_shape = (self.frames_count, self.screen_shape[0], self.screen_shape[1])
         self.state = np.zeros(self.state_shape, dtype=np.float32)
         self.action_queue = deque(maxlen=2)
         # self.action_delay = 0.02 # delay between actions in seconds
@@ -126,14 +129,16 @@ class OsuEnv(Env):
 
         _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.time()}
         _img['img'] = cv2.resize(_img['img'], (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
+        # print(_img['img'].shape)
         _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
-        self.temp_img_queue.append(_img)
+        # print(_img['img'].shape)
+        self.temp_img_queue.append(_img) # img is a 60*80 grayscale image
 
         img_lst = []
         # find the closest frame to the target time
         interval = 0.1
         target_time = self.temp_img_queue[-1]['time']
-        for i in range(4):
+        for i in range(self.frames_count):
             idx = min(range(len(self.temp_img_queue)), key=lambda j: abs(self.temp_img_queue[j]['time'] - (target_time - interval * i)))
             img_lst.append(self.temp_img_queue[idx]['img'])
         
@@ -144,8 +149,9 @@ class OsuEnv(Env):
 
     def _update_opencv_window(self):
         try:
-            screen_np = self.state.squeeze()
-            screen_np = np.repeat(np.repeat(screen_np, 4, axis=0), 4, axis=1)
+            screen_np = self.state.squeeze() # if [1, 60, 80] -> [60, 80]
+            screen_np = screen_np.astype(np.uint8)
+            screen_np = np.repeat(np.repeat(screen_np, 4, axis=1), 4, axis=0)
             cv2.imshow('Osu', screen_np)
             cv2.waitKey(1)
         except Exception as e:
@@ -155,7 +161,7 @@ class OsuEnv(Env):
         pass
     
     def _calc_score(self):
-        stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
+        stream_companion_path = SC_PATH
         with open(os.path.join(stream_companion_path, 'livepp_hits.txt'), 'r') as f:
             file = f.read()
             if len(file) <= 1:
@@ -194,7 +200,7 @@ class OsuEnv(Env):
         return float(reward)
 
     def _detect_game_state(self):
-        stream_companion_path = 'C:/Program Files (x86)/StreamCompanion/Files'
+        stream_companion_path = SC_PATH
         T = 0
         while True:
             with open(os.path.join(stream_companion_path, 'song_completion.txt'), 'r') as f:
