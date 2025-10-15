@@ -19,6 +19,7 @@ from IPython.display import clear_output
 import replays as r
 from env import OsuEnv
 from models import Actor, Critic
+from constants import *
 
 def detect_command(replays, auto_choose_song, enable_save_replay):
     """
@@ -143,7 +144,7 @@ def params_update(time_steps):
     print('Training time: %.2f seconds' % (time.time() - training_start_time))
 
 def train_agent(episodes: int, buffer: int, batch_size: int, 
-                gamma: float, tau: float, sigma: float, scale: list):
+                gamma: float, tau: float, sigma: float, scale: list = [1, 1]):
     """
     ### train the agent using DDPG algorithm
 
@@ -159,8 +160,8 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         ``sigma``: noise standard deviation
     """
 
-    source_folder = 'C:/Program Files (x86)/StreamCompanion/Files'
-    target_file = 'C:/Users/sword/.vscode/vtb/Osu/score_log.txt'
+    source_folder = SC_PATH
+    target_file = f'{CURRENT_DIR}/score_log.txt'
 
     with open(target_file, 'a', encoding='utf-8') as tgt:
         tgt.write('\n===========\n')

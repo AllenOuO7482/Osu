@@ -12,8 +12,9 @@ from pathlib import Path
 import pydirectinput as pyd
 
 from env import OsuEnv
+from constants import *
 
-def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
+def record_game_state(save_folder=f'{CURRENT_DIR}/Replays'):
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
     num_processes = 3
@@ -50,7 +51,7 @@ def record_game_state(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
 
         time.sleep(1/30)
 
-def record_2_frames(save_folder=r'C:\Users\sword\.vscode\vtb\Osu\Replays'):
+def record_2_frames(save_folder=F'{CURRENT_DIR}/Replays'):
     raw_img_queue = mp.Queue(maxsize=3)
     env = OsuEnv(raw_img_queue)
     num_processes = 3
@@ -113,7 +114,7 @@ def load_worker(q, q_lock, r_lock, replays):
         except Exception as e:
             print(f"Error loading replay: {file_path}, Exception: {e}")
 
-def load(buffer, folder_path = "C:/Users/sword/.vscode/vtb/Osu/Replays"):
+def load(buffer, folder_path = f"{CURRENT_DIR}/Replays"):
     """
     load replays from a folder
     """
