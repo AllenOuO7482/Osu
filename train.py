@@ -109,13 +109,13 @@ def params_update(time_steps):
     """
     ### update the parameters of the agent
     """
-    training_start_time = time.time()
+    training_start_time = time.perf_counter()
     for j in range(time_steps):
         # when buffer is full, start training
         # sample a batch of data from replay buffer
         s_bat, a0_bat, r_bat, s1_bat = get_batch(replays, batch_size, device)
-        a_bat = A_main(s_bat[:, :state_dim[0], :, :])
-        q_bat = Q_main(s_bat[:, :state_dim[0], :, :], a_bat)
+        a_bat = A_main(s_bat[:, :STATE_DIM[0], :, :])
+        q_bat = Q_main(s_bat[:, :STATE_DIM[0], :, :], a_bat)
         # calculate loss and update Actor
         loss_a = -torch.mean(q_bat)
         opt_a.zero_grad()
@@ -123,10 +123,10 @@ def params_update(time_steps):
         opt_a.step()
         losses_a.append(loss_a.item())
         # update Q-function
-        y_hat = Q_main(s_bat[:, :state_dim[0], :, :], a0_bat) # predicted Q-value
+        y_hat = Q_main(s_bat[:, :STATE_DIM[0], :, :], a0_bat) # predicted Q-value
         with torch.no_grad():
-            a1_bat = A_target(s1_bat[:, :state_dim[0], :, :])
-            q1_bat = Q_target(s1_bat[:, :state_dim[0], :, :], a1_bat) # next state's Q-value
+            a1_bat = A_target(s1_bat[:, :STATE_DIM[0], :, :])
+            q1_bat = Q_target(s1_bat[:, :STATE_DIM[0], :, :], a1_bat) # next state's Q-value
             y = r_bat + gamma * q1_bat
         # calculate loss and update Critic
         loss_c = loss_fn(y.detach(), y_hat)
@@ -141,7 +141,7 @@ def params_update(time_steps):
         if j % 25 == 0 and j > 0:
             print('Step:', j, 'Loss_a: %.4f' % loss_a.item(), 'Loss_c: %.4f' % loss_c.item())
 
-    print('Training time: %.2f seconds' % (time.time() - training_start_time))
+    print('Training time: %.2f seconds' % (time.perf_counter() - training_start_time))
 
 def train_agent(episodes: int, buffer: int, batch_size: int, 
                 gamma: float, tau: float, sigma: float, scale: list = [1, 1]):
@@ -167,8 +167,9 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         tgt.write('\n===========\n')
 
     if epoch == 0 and not is_load:
-        print('start pre-training, time_steps: 1000')
-        params_update(1000)
+        if len(replays) >= 10000:
+            print('start pre-training, time_steps: 1000')
+            params_update(1000)
         
         checkpoint = {
             'epochs': 0,
@@ -184,7 +185,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
 
     for i in range(epoch, episodes):
         s = env.reset()
-        s = torch.tensor(s[:state_dim[0], :, :], dtype=torch.float32).to(device)
+        s = torch.tensor(s[:STATE_DIM[0], :, :], dtype=torch.float32).to(device)
         if not dc_process.is_alive():
             dc_process.start()
 
@@ -193,7 +194,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
         done = False
         start_training = False
         
-        now = time.time()
+        now = time.perf_counter()
         frame_count = 0
         while env.sd['status'] != 'Playing':
             time.sleep(0.05)
@@ -212,7 +213,7 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
                 time.sleep(0.05)
 
             # collect experience 
-            a = A_main(s[:state_dim[0], :, :], scale).detach()
+            a = A_main(s[:STATE_DIM[0], :, :], scale).detach()
 
             a0 = np.clip(np.random.normal(a.cpu().numpy(), sigma), act_low, act_high)
             try: a0 = a0.squeeze(0) # remove batch dimension
@@ -256,12 +257,12 @@ def train_agent(episodes: int, buffer: int, batch_size: int,
             episode_reward += r
             
             s = s1
-            elapsed_time = time.time() - now
+            elapsed_time = time.perf_counter() - now
             if elapsed_time >= 1:
                 fps_value = frame_count / elapsed_time
                 print('FPS: %.2f' % (fps_value))
 
-                now = time.time()
+                now = time.perf_counter()
                 frame_count = 0
 
             else:
@@ -320,9 +321,8 @@ if __name__ == '__main__':
         else:
             print("Invalid input. Please enter 'y' or 'n'.")
     
-    start_time = time.time()
+    start_time = time.perf_counter()
     # define state, action and reward 
-    state_dim = (4, 60, 80)
     action_dim = 2
     act_low = np.array([-1, -1], dtype=np.float32)
     act_high = np.array([1, 1], dtype=np.float32)
@@ -341,8 +341,8 @@ if __name__ == '__main__':
         hyperparam_dict = checkpoint['hyperparameters']
 
         # define actor-critic models
-        A_main = Actor(state_dim, action_dim).to(device)
-        Q_main = Critic(state_dim, action_dim).to(device)
+        A_main = Actor(STATE_DIM, action_dim).to(device)
+        Q_main = Critic(STATE_DIM, action_dim).to(device)
         opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
         opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
         loss_fn = nn.MSELoss() # Critic loss function
@@ -363,8 +363,8 @@ if __name__ == '__main__':
             'gamma': 0.995, 'tau': 0.003, 'sigma': 0.15
         }
         # define actor-critic models with default hyperparameters
-        A_main = Actor(state_dim, action_dim).to(device)
-        Q_main = Critic(state_dim, action_dim).to(device)
+        A_main = Actor(STATE_DIM, action_dim).to(device)
+        Q_main = Critic(STATE_DIM, action_dim).to(device)
         opt_a = optim.Adam(A_main.parameters(), lr=1e-5) # Actor optimizer
         opt_c = optim.Adam(Q_main.parameters(), lr=1e-4) # Critic optimizer
         loss_fn = nn.MSELoss() # Critic loss function
@@ -389,7 +389,7 @@ if __name__ == '__main__':
     A_target.load_state_dict(A_main.state_dict())
     Q_target = copy.deepcopy(Q_main).to(device)
     Q_target.load_state_dict(Q_main.state_dict())
-    print('model initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
+    print('model initialization done, time elapsed: %.2f seconds' % (time.perf_counter() - start_time))
 
     # hyperparameters and replays
     episodes = hyperparam_dict['episodes']      # episodes
@@ -399,10 +399,10 @@ if __name__ == '__main__':
     sigma = hyperparam_dict['sigma']            # noise standard deviation
     buffer = hyperparam_dict['buffer']          # replay buffer size
     batch_size = hyperparam_dict['batch_size']  # batch size
-    dataset = r.load(5000, folder_path=dataset_folder)
-    replays = r.load(buffer-5000, folder_path=replays_folder) # deque of replays
+    # dataset = r.load(5000, folder_path=dataset_folder)
+    replays = r.load(buffer, folder_path=replays_folder) # deque of replays
     # replays = deque(maxlen=buffer)
-    print('replays loaded, time elapsed: %.2f seconds' % (time.time() - start_time))
+    print('replays loaded, time elapsed: %.2f seconds' % (time.perf_counter() - start_time))
 
     raw_img_queue = mp.Queue(maxsize=4)
     env = OsuEnv(raw_img_queue)
@@ -418,7 +418,7 @@ if __name__ == '__main__':
     dc_process = threading.Thread(target=detect_command, args=(replays, auto_choose_song, enable_save_replay), daemon=True)
     dc_process.start()
 
-    print('all initialization done, time elapsed: %.2f seconds' % (time.time() - start_time))
+    print('all initialization done, time elapsed: %.2f seconds' % (time.perf_counter() - start_time))
  
     # train agent with replays
     train_agent(episodes, buffer, batch_size, gamma, tau, sigma)

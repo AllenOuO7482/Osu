@@ -46,7 +46,6 @@ Loituma - Ievan Polkka [SPINNER-MADNESS2] CS:3 AR:0 OD:0 HP:0 score: 138700, acc
 Loituma - Ievan Polkka [SPINNER-MADNESS2] CS:3 AR:0 OD:0 HP:0 score: 136400, acc: 100.00 // 300, 100, 50, miss: 1 0 0 0
 Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 4060, acc: 6.43 // 300, 100, 50, miss: 7 7 14 153
 
-
 Kimura & Tube Tonic - Without You (Nightcore Mix) [Lally] CS:2 AR:2 OD:2 HP:2 score: 28500, acc: 16.67 // 300, 100, 50, miss: 8 6 17 46
 
 Meg & Dia - Monster (DotEXE Remix) [KwaN's Normal] CS:3 AR:4 OD:3 HP:3 score: 2350, acc: 3.28 // 300, 100, 50, miss: 3 9 1 175
@@ -100,8 +99,6 @@ RiraN - Unshakable [Shakebale] CS:3.6 AR:9.5 OD:8.8 HP:4 score: 0, acc: 0.00 // 
 RiraN - Unshakable [Shakebale] CS:3.6 AR:9.5 OD:8.8 HP:4 score: 0, acc: 0.00 // 300, 100, 50, miss: 0 0 0 9
 
 The Flashbulb - You Take the World's Weight Away [Normal] CS:4.3 AR:5.5 OD:5 HP:4 score: 9450, acc: 5.18 // 300, 100, 50, miss: 6 6 2 147
-
-
 
 RiraN - Unshakable [Shakebale] CS:3.6 AR:9.5 OD:8.8 HP:4 score: 1000, acc: 37.04 // 300, 100, 50, miss: 3 0 2 4
 RiraN - Unshakable [Shakebale] CS:3.6 AR:9.5 OD:8.8 HP:4 score: 0, acc: 0.00 // 300, 100, 50, miss: 0 0 0 9
@@ -220,7 +217,6 @@ La Luna - Take Me (Nightcore Mix) [Easy] CS:3 AR:3 OD:2 HP:2 score: 3640, acc: 1
 Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 650, acc: 0.92 // 300, 100, 50, miss: 0 1 8 172
 toby fox - Spider Dance [Easy] CS:2 AR:3.3 OD:2.5 HP:2.5 score: 950, acc: 1.38 // 300, 100, 50, miss: 0 1 7 101
 
-
 Cascada - Bad Boy (Nightcore Mix) [Beginner] CS:2 AR:2 OD:1 HP:1 score: 5850, acc: 9.21 // 300, 100, 50, miss: 4 4 10 58
 Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 5180, acc: 7.64 // 300, 100, 50, miss: 6 16 15 144
 Mili - world.execute(me); [mapset.easy(Exile-);] CS:3 AR:3 OD:2 HP:2 score: 1480, acc: 2.50 // 300, 100, 50, miss: 2 4 5 156
@@ -229,8 +225,6 @@ Wakeshima Kanon - world's end, girl's rondo (TV Size) [Normal] CS:3.6 AR:5 OD:4.
 nora2r - B.B.K.K.B.K.K [Beginner] CS:2 AR:2.5 OD:2 HP:2 score: 1660, acc: 3.45 // 300, 100, 50, miss: 3 2 7 128
 
 Roselia & Afterglow - MIIRO vs. Ai no Scenario [Easy] CS:2.7 AR:4 OD:2 HP:3 score: 990, acc: 2.36 // 300, 100, 50, miss: 2 2 1 115
-
-
 
 Meg & Dia - Monster (DotEXE Remix) [Newbie] CS:2 AR:0 OD:1 HP:1 score: 2060, acc: 5.49 // 300, 100, 50, miss: 3 3 4 75
 Milkychan - Stronger Than You -Chara Response- [Marianna's Beginner] CS:2 AR:1 OD:1.5 HP:1.5 score: 1710, acc: 1.83 // 300, 100, 50, miss: 0 2 7 91
@@ -331,8 +325,6 @@ LukHash - GLITCH [EASY] CS:2.2 AR:3 OD:2 HP:2 score: 4910, acc: 4.75 // 300, 100
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 1190, acc: 13.89 // 300, 100, 50, miss: 1 0 4 7
 
 ===========
-
-===========
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 1560, acc: 16.67 // 300, 100, 50, miss: 1 0 6 5
 
 Junichi Masuda - Shion Town no Thema [Lumael's Easy] CS:2 AR:2 OD:2 HP:2.5 score: 1020, acc: 7.66 // 300, 100, 50, miss: 2 1 3 31
@@ -349,8 +341,6 @@ The Flashbulb - You Take the World's Weight Away [Easy] CS:3 AR:3.3 OD:3 HP:3 sc
 The Flashbulb - You Take the World's Weight Away [Easy] CS:3 AR:3.3 OD:3 HP:3 score: 740, acc: 2.62 // 300, 100, 50, miss: 1 0 5 64
 
 ===========
-
-===========
 Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 4390, acc: 6.81 // 300, 100, 50, miss: 6 10 18 147
 
 ===========
@@ -360,20 +350,6 @@ Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 2160, acc: 3.22 /
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 8610, acc: 15.28 // 300, 100, 50, miss: 1 0 5 6
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 950, acc: 5.07 // 300, 100, 50, miss: 0 2 3 18
 ALTIMA - Burst The Gravity (TV Size) [Xinely's Easy] CS:3 AR:3 OD:2 HP:2 score: 1130, acc: 2.04 // 300, 100, 50, miss: 1 1 4 92
-
-===========
-
-===========
-
-===========
-
-===========
-
-===========
-
-===========
-
-===========
 
 ===========
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 10190, acc: 22.22 // 300, 100, 50, miss: 1 1 8 2
@@ -578,7 +554,6 @@ raph - ificouldbelikeu [normal] CS:3.4 AR:6 OD:4.8 HP:3 score: 10090, acc: 13.60
 LukHash - GLITCH [EASY] CS:2.2 AR:3 OD:2 HP:2 score: 17740, acc: 17.51 // 300, 100, 50, miss: 31 33 39 174
 
 ===========
-
 ALTIMA - Burst The Gravity (TV Size) [Xinely's Easy] CS:3 AR:3 OD:2 HP:2 score: 7360, acc: 20.75 // 300, 100, 50, miss: 12 14 22 50
 nora2r - B.B.K.K.B.K.K [Beginner] CS:2 AR:2.5 OD:2 HP:2 score: 9990, acc: 19.76 // 300, 100, 50, miss: 20 15 16 89
 IAHN - Snowdrop [Easy] CS:3 AR:3 OD:2 HP:1 score: 5330, acc: 14.09 // 300, 100, 50, miss: 8 10 14 65
@@ -690,33 +665,10 @@ toby fox - Hopes and Dreams [Easy] CS:3 AR:2.5 OD:2 HP:2 score: 10060, acc: 17.0
 Nekomata Master feat. *spiLa* - Clumsy thoughts [623's Easy] CS:3 AR:3 OD:2 HP:2 score: 17130, acc: 18.63 // 300, 100, 50, miss: 17 47 41 107
 
 ===========
-
-===========
-
-
-===========
-
-===========
-
-===========
-
-===========
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 19930, acc: 40.28 // 300, 100, 50, miss: 3 2 7 0
 
 ===========
-
-===========
-
-===========
-
-===========
 AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Ultra Beginner] CS:2 AR:0 OD:0 HP:0 score: 10950, acc: 25.00 // 300, 100, 50, miss: 1 4 4 3
-
-===========
-
-===========
-
-===========
 
 ===========
 Loituma - Ievan Polkka [SPINNER-MADNESS2] CS:3 AR:0 OD:0 HP:0 score: 148300, acc: 100.00 // 300, 100, 50, miss: 1 0 0 0
@@ -725,3 +677,32 @@ Milkychan - Stronger Than You -Chara Response- [Marianna's Beginner] CS:2 AR:1 O
 toby fox - Confession [Normal] CS:4 AR:5 OD:3 HP:3 score: 1250, acc: 10.65 // 300, 100, 50, miss: 3 2 1 30
 Airi Suzuki - Heart wa Oteage (TV Size) [KoldNoodl's Easy] CS:3 AR:3 OD:2 HP:2 score: 5160, acc: 13.06 // 300, 100, 50, miss: 12 8 6 94
 Neru x Rib - Jinsei wa Hoeru [Mako's Normal] CS:3 AR:5 OD:4 HP:4 score: 10910, acc: 11.15 // 300, 100, 50, miss: 17 15 40 185
+
+===========
+toby fox - Bergentrueckung [Easy] CS:3 AR:3 OD:2 HP:2 score: 20150, acc: 9.17 // 300, 100, 50, miss: 2 5 0 33
+
+===========
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 16030, acc: 10.87 // 300, 100, 50, miss: 1 0 9 13
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 15910, acc: 10.14 // 300, 100, 50, miss: 1 0 8 14
+The Flashbulb - You Take the World's Weight Away [Easy] CS:3 AR:3.3 OD:3 HP:3 score: 7710, acc: 3.81 // 300, 100, 50, miss: 2 0 4 64
+Ben Briggs - Wave Island [Easy] CS:3 AR:3 OD:3 HP:3 score: 696222, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+Set It Off - Kill The Lights [Easy] CS:2 AR:4 OD:3 HP:3 score: 5110, acc: 7.92 // 300, 100, 50, miss: 10 5 16 150
+MYTH & ROID - STYX HELIX [xxdeathx's Easy] CS:3 AR:3.5 OD:2 HP:2 score: 36160, acc: 8.15 // 300, 100, 50, miss: 11 15 16 187
+Roselia & Afterglow - MIIRO vs. Ai no Scenario [Beginner] CS:2.5 AR:3 OD:1.5 HP:2 score: 4410, acc: 2.17 // 300, 100, 50, miss: 1 1 1 66
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 15880, acc: 10.14 // 300, 100, 50, miss: 1 0 8 14
+toby fox - Mysterious Place [Tactic's Normal] CS:5 AR:5 OD:5 HP:5 score: 6500, acc: 4.00 // 300, 100, 50, miss: 1 0 0 24
+The Flashbulb - You Take the World's Weight Away [Easy] CS:3 AR:3.3 OD:3 HP:3 score: 9210, acc: 5.24 // 300, 100, 50, miss: 3 0 4 63
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 17010, acc: 10.14 // 300, 100, 50, miss: 1 1 6 15
+Drop - Granat [Beginner] CS:2 AR:2 OD:2 HP:1 score: 590, acc: 3.74 // 300, 100, 50, miss: 1 2 1 45
+Camellia - Racemization [beginner] CS:3 AR:3 OD:2 HP:1 score: 94230, acc: 8.52 // 300, 100, 50, miss: 8 5 10 110
+Wizet, Nexon - Various BGM 2 [Mole King Rises] CS:0 AR:0 OD:0 HP:0 score: 2245867, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+MAN WITH A MISSION - Merry-Go-Round (TV Size) [Wanpachi's Easy] CS:2.8 AR:3 OD:2 HP:2 score: 2377785, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+Camellia - crystallized [Side's Easy] CS:3.5 AR:4 OD:3 HP:2 score: 2481846, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+The Offspring - You're Gonna Go Far Kid [Not That Far] CS:3 AR:2 OD:2 HP:1 score: 2754424, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+cYsmix - Babaroque (Short Ver.) [Easy] CS:2.5 AR:3 OD:2 HP:2 score: 20630, acc: 5.28 // 300, 100, 50, miss: 5 5 4 125
+
+Ben Briggs - Wave Island [Easy] CS:3 AR:3 OD:3 HP:3 score: 6580, acc: 6.81 // 300, 100, 50, miss: 5 5 9 101
+USAO - Miracle 5ympho X [Beginner] CS:3 AR:3 OD:3 HP:3 score: 20430, acc: 8.84 // 300, 100, 50, miss: 5 2 10 66
+Hige Driver - Miracle Sugite Yabai (feat. shully) [Easy] CS:3 AR:3 OD:2 HP:1 score: 3552782, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+THE ORAL CIGARETTES - Kyouran Hey Kids!! [Collab Easy] CS:2.5 AR:3 OD:2 HP:2 score: 3662970, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0
+AKINO from bless4 & CHiCO with HoneyWorks - MIIRO vs. Ai no Scenario [Super Beginner] CS:2.5 AR:1 OD:1 HP:1 score: 4003301, acc: 100.00 // 300, 100, 50, miss: 49024 0 0 0

@@ -181,7 +181,7 @@ def save(replays: deque, enable_save_replay):
             }
             data_queue.put((batch, i+1))
 
-        now = time.time()
+        now = time.perf_counter()
         print("start saving replays")
 
         processes = []
@@ -194,7 +194,7 @@ def save(replays: deque, enable_save_replay):
         for p in processes:
             p.join()
 
-        print("All processes done, time elapsed: %.2f" % (time.time() - now))
+        print("All processes done, time elapsed: %.2f" % (time.perf_counter() - now))
         enable_save_replay.value = True
     
     else:

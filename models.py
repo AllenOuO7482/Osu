@@ -15,10 +15,11 @@ def init_weight_xavier(m):
             nn.init.constant_(m.bias, 0)
 
 def enhance_features(x: torch.Tensor):
+    threshold = 128
     # 223 to 255 -> -1 to 255 -> 0 to 255
-    x = torch.where(x < 223, torch.tensor(0, dtype=x.dtype, device=x.device), x)
-    mask = (x >= 223)
-    x[mask] = ((x[mask] - 223) / (255 - 223)) * 256 - 1
+    x = torch.where(x < threshold, torch.tensor(0, dtype=x.dtype, device=x.device), x)
+    mask = (x >= threshold)
+    x[mask] = ((x[mask] - threshold) / (255 - threshold)) * 256 - 1
     x = torch.where(x < 0, torch.tensor(0, dtype=x.dtype, device=x.device), x)
     # for i in range(x.shape[0]):
     #     # 1 0.85 0.7 0.55

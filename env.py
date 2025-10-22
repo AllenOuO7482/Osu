@@ -10,40 +10,40 @@ import numpy as np
 import pygetwindow as gw
 import pydirectinput as pyd
 import multiprocessing as mp
+import json
 
-from constants import SC_PATH
+from constants import *
 
 class OsuEnv(Env):
     def __init__(self, raw_img_queue, test_mode=False):
         super(OsuEnv, self).__init__()
-        self.action_range = (310, 70, 1610, 1045) # (x_min, y_min, x_max, y_max)
+        # ACTION_RANGE = (310, 70, 1610, 1045) # (x_min, y_min, x_max, y_max)
         self.action_space = Box(
-            low=np.array([self.action_range[0], self.action_range[1]]), 
-            high=np.array([self.action_range[2], self.action_range[3]]), 
+            low=np.array([ACTION_RANGE[0], ACTION_RANGE[1]]), 
+            high=np.array([ACTION_RANGE[2], ACTION_RANGE[3]]), 
             shape=(2,)
         )
         
-        self.frames_count = 1
-        self.screen_shape = (60, 80)
-        screen_space = Box(low=0, high=255, shape=self.screen_shape, dtype=np.float32)
+        # STATE_DIM[0] = 4
+        # self.screen_shape = (60, 80)
+        screen_space = Box(low=0, high=255, shape=STATE_DIM[1:], dtype=np.float32)
         
         self.observation_space = screen_space
-        self.state_shape = (self.frames_count, self.screen_shape[0], self.screen_shape[1])
-        self.state = np.zeros(self.state_shape, dtype=np.float32)
+        self.state = np.zeros(STATE_DIM, dtype=np.float32)
         self.action_queue = deque(maxlen=2)
         # self.action_delay = 0.02 # delay between actions in seconds
         # self.action_data = None
         
-        self.reset_pos = ((self.action_range[0] + self.action_range[2]) // 2, (self.action_range[1] + self.action_range[3]) // 2)
+        self.reset_pos = ((ACTION_RANGE[0] + ACTION_RANGE[2]) // 2, (ACTION_RANGE[1] + ACTION_RANGE[3]) // 2)
 
         self.raw_img_queue = raw_img_queue 
         self.temp_img_queue = deque(maxlen=40)
         for i in range(self.temp_img_queue.maxlen):
-            zero_img = {'img': np.zeros(self.screen_shape, dtype=np.float32), 'time': time.time()}
+            zero_img = {'img': np.zeros(STATE_DIM[1:], dtype=np.float32), 'time': time.perf_counter()}
             self.temp_img_queue.append(zero_img)
 
-        self.empty_frame = np.zeros(self.state_shape, dtype=np.float32)
-        self.img_prev = np.zeros(self.screen_shape, dtype=np.float32)
+        self.empty_frame = np.zeros(STATE_DIM, dtype=np.float32)
+        self.img_prev = np.zeros(STATE_DIM[1:], dtype=np.float32)
         self.display = True
         self.game_end = True
         self.game_over = False # True when game is over, else False
@@ -121,14 +121,14 @@ class OsuEnv(Env):
                 img_np = np.array(img)  # Convert to numpy array for faster processing
                 if self.raw_img_queue.full():
                     self.raw_img_queue.get()
-                self.raw_img_queue.put({'img': img_np, 'time': time.time()})
+                self.raw_img_queue.put({'img': img_np, 'time': time.perf_counter()})
     
     def _process_frame(self):
         while self.raw_img_queue.empty():
             time.sleep(0.01)
 
-        _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.time()}
-        _img['img'] = cv2.resize(_img['img'], (self.screen_shape[1], self.screen_shape[0]), interpolation=cv2.INTER_AREA)
+        _img = self.raw_img_queue.get() # img = {'img': img_np, 'time': time.perf_counter()}
+        _img['img'] = cv2.resize(_img['img'], (STATE_DIM[2], STATE_DIM[1]), interpolation=cv2.INTER_AREA)
         # print(_img['img'].shape)
         _img['img'] = cv2.cvtColor(_img['img'], cv2.COLOR_BGR2GRAY)
         # print(_img['img'].shape)
@@ -138,7 +138,7 @@ class OsuEnv(Env):
         # find the closest frame to the target time
         interval = 0.1
         target_time = self.temp_img_queue[-1]['time']
-        for i in range(self.frames_count):
+        for i in range(STATE_DIM[0]):
             idx = min(range(len(self.temp_img_queue)), key=lambda j: abs(self.temp_img_queue[j]['time'] - (target_time - interval * i)))
             img_lst.append(self.temp_img_queue[idx]['img'])
         
@@ -167,13 +167,13 @@ class OsuEnv(Env):
             if len(file) <= 1:
                 return 0
             
-            # expect input 0 0 0 0 12345
-            hits = file.split() 
-            hits_300 = int(hits[0])
-            hits_100 = int(hits[1])
-            hits_50 = int(hits[2])
-            hits_miss = int(hits[3])
-            score = int(hits[-1])
+            # expect input "300": "0", "100": "0", "50": "0", "miss": "0", "score": "12345"
+            hits = json.loads('{' + file + '}')
+            hits_300 = int(hits['300'])
+            hits_100 = int(hits['100'])
+            hits_50 = int(hits['50'])
+            hits_miss = int(hits['miss'])
+            score = int(hits['score'])
             
         hits_count = (hits_300, hits_100, hits_50, hits_miss, score)
         score_delta = (
